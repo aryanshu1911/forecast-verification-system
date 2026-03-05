@@ -1,4 +1,4 @@
-# IMD Mumbai - Rainfall Forecast Verification & Analysis Dashboard
+# IMD Mumbai - Rainfall Forecast Verification and Analysis Dashboard
 
 ## 🌧️ Project Overview
 
