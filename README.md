@@ -155,4 +155,3 @@ This system is designed for internal IMD Mumbai use. For technical support or fe
 
 **© 2024 Indian Meteorological Department, Mumbai Regional Centre**  
 *Government of India - Ministry of Earth Sciences*
-# weather-forecast
