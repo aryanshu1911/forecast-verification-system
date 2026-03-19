@@ -1,0 +1,94 @@
+{
+  "mode": "multi",
+  "classifications": {
+    "dual": {
+      "enabled": false,
+      "threshold": 64.5,
+      "labels": {
+        "below": "L",
+        "above": "H"
+      }
+    },
+    "multi": {
+      "enabled": true,
+      "items": [
+        {
+          "id": "L",
+          "variableName": "L",
+          "label": "Less",
+          "thresholdMm": 0,
+          "codes": [
+            1,
+            8
+          ],
+          "enabled": true,
+          "order": 1
+        },
+        {
+          "id": "H",
+          "variableName": "H",
+          "label": "Heavy",
+          "thresholdMm": 64.5,
+          "codes": [
+            2,
+            5,
+            6,
+            7,
+            27,
+            33,
+            37,
+            45,
+            56
+          ],
+          "enabled": true,
+          "order": 2
+        },
+        {
+          "id": "VH",
+          "variableName": "VH",
+          "label": "Very Heavy",
+          "thresholdMm": 115.6,
+          "codes": [
+            9,
+            10,
+            11,
+            12,
+            25,
+            28,
+            34,
+            39,
+            44
+          ],
+          "enabled": true,
+          "order": 3
+        },
+        {
+          "id": "XH",
+          "variableName": "XH",
+          "label": "Extremely Heavy",
+          "thresholdMm": 204.5,
+          "codes": [
+            26,
+            29,
+            35,
+            38
+          ],
+          "enabled": true,
+          "order": 4
+        },
+        {
+          "id": "NEW_1773058956178",
+          "variableName": "NEW",
+          "label": "New Classification",
+          "thresholdMm": 0,
+          "codes": [
+            57
+          ],
+          "enabled": true,
+          "order": 5
+        }
+      ]
+    }
+  },
+  "lastUpdated": "2026-03-19T12:52:47.209Z"
+}

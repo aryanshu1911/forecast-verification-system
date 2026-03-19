@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import path from 'path';
-import fs from 'fs/promises';
-
-const execAsync = promisify(exec);
+import { compareForDate, calculateAccuracy } from '@/app/utils/comparisonEngine';
+import { parseDate } from '@/app/utils/dateUtils';
 
 /**
  * GET /api/verification/[date]
  * Lazy-loads verification data for a specific date
- * Uses cached data if available, otherwise calculates on-demand
+ * Calculates on-demand from file-based storage
  */
 export async function GET(
   request: NextRequest,
@@ -27,196 +23,99 @@ export async function GET(
       );
     }
 
-    const dataDir = path.join(process.cwd(), 'data');
-    const verificationFile = path.join(dataDir, 'verification', `${date}.json`);
+    // Parse date - this is the SELECTED DATE (e.g., June 11)
+    const { year, month, day } = parseDate(date);
     
-    // Check if cached verification exists
-    try {
-      await fs.access(verificationFile);
-      // Return cached data
-      const cachedData = await fs.readFile(verificationFile, 'utf-8');
-      const result = JSON.parse(cachedData);
+    // NEW LOGIC:
+    // - Realized data is always from SELECTED DATE + 1 (e.g., June 12)
+    // - Warning data goes backwards from SELECTED DATE:
+    //   D1 = Selected Date (June 11)
+    //   D2 = Selected Date - 1 day (June 10)
+    //   D3 = Selected Date - 2 days (June 9)
+    //   D4 = Selected Date - 3 days (June 8)
+    //   D5 = Selected Date - 4 days (June 7)
+    
+    // Calculate verification for all lead days
+    const leadDays = ['D1', 'D2', 'D3', 'D4', 'D5'];
+    const leadTimeResults: any = {};
+    const allVerifications: any[] = [];
+    
+    for (let i = 0; i < leadDays.length; i++) {
+      const leadDay = leadDays[i];
+      const leadDayName = `day${i + 1}`;
       
-      return NextResponse.json({
-        success: true,
-        cached: true,
-        ...result
-      });
-    } catch {
-      // No cache, calculate on-demand
-    }
-    
-    // Calculate verification for this date
-    const pythonCommand = `cd ${process.cwd()} && source .venv/bin/activate && python3 -c "
-import sys
-sys.path.append('app/utils')
-from heavyRainfallVerifier import HeavyRainfallVerifier
-from storageManager import StorageManager
-import json
+  // WARNING SOURCE: use the SELECTED DATE for all leadDays (D1..D5)
+  // i.e., load from data/warning/<leadDay>/<selectedDate>
+  const warningYear = year;
+  const warningMonth = month;
+  const warningDay = day;
 
-# Extract year and month from date
-date_parts = '${date}'.split('-')
-year = int(date_parts[0])
-month = int(date_parts[1])
-
-# Load data from storage
-storage = StorageManager('data')
-forecast_data = storage.load_forecast_data(year, month)
-realised_data = storage.load_realised_data(year, month)
-
-if not forecast_data or not realised_data:
-    print(json.dumps({'success': False, 'error': 'No data available for this month'}))
-    sys.exit(0)
-
-# Run verification for this specific date only
-verifier = HeavyRainfallVerifier(heavy_threshold=64.5)
-
-# Verify single date
-from datetime import datetime
-verification_results = []
-
-# Get all forecast districts
-forecast_districts = set(forecast_data.keys())
-
-for district in forecast_districts:
-    # Try to find matching observed district
-    observed_district = verifier.parser.map_district_name(district, list(realised_data.keys()))
-    
-    if not observed_district:
-        continue
-    
-    # Get observed rainfall for this date
-    if '${date}' not in realised_data[observed_district]:
-        continue
-    
-    observed_rainfall = realised_data[observed_district]['${date}']
-    observed_heavy = verifier.parser.is_heavy_rainfall_observed(observed_rainfall)
-    
-    # Verify each lead time (Day-1 to Day-5)
-    for lead_days in range(1, 6):
-        # Get forecast for this lead time
-        forecast_code = verifier.parser.get_forecast_for_verification(
-            forecast_data, district, '${date}', lead_days
-        )
-        
-        if forecast_code is None:
-            continue
-        
-        forecast_heavy = verifier.parser.is_heavy_rainfall_forecast(forecast_code)
-        
-        # Perform verification
-        result_type, description = verifier.verify_single_prediction(
-            forecast_code, observed_rainfall
-        )
-        
-        verification_results.append({
-            'district': district,
-            'date': '${date}',
-            'lead_days': lead_days,
-            'forecast_code': forecast_code,
-            'forecast_heavy': forecast_heavy,
-            'observed_rainfall': observed_rainfall,
-            'observed_heavy': observed_heavy,
-            'result_type': result_type,
-            'result_description': description
-        })
-
-# Build date-specific result
-def build_lead_time_table(results, lead_days):
-    lead_results = [r for r in results if r['lead_days'] == lead_days]
-    
-    verifications = []
-    for r in lead_results:
-        verifications.append({
-            'district': r['district'],
-            'forecastHeavy': r['forecast_heavy'],
-            'forecastRainfall': r['forecast_code'],
-            'observedHeavy': r['observed_heavy'],
-            'observedRainfall': r['observed_rainfall'],
-            'result': r['result_type']
-        })
-    
-    # Calculate stats
-    hits = len([r for r in lead_results if r['result_type'] == 'Hit'])
-    misses = len([r for r in lead_results if r['result_type'] == 'Miss'])
-    false_alarms = len([r for r in lead_results if r['result_type'] == 'False Alarm'])
-    correct_negatives = len([r for r in lead_results if r['result_type'] == 'Correct Negative'])
-    total = len(lead_results)
-    accuracy = ((hits + correct_negatives) / total * 100) if total > 0 else 0.0
-    
-    return {
-        'verifications': verifications,
-        'statistics': {
-            'hits': hits,
-            'misses': misses,
-            'falseAlarms': false_alarms,
-            'correctNegatives': correct_negatives,
-            'total': total,
-            'accuracy': accuracy
+  const comparisons = await compareForDate(warningYear, warningMonth, warningDay, leadDay, year, month, day);
+      const stats = calculateAccuracy(comparisons);
+      
+      // Format verifications for UI - use new comparison structure
+      const verifications = comparisons.map(c => ({
+        district: c.district,
+        date: c.date,
+        forecastCode: c.forecastCode,
+        forecastClassification: c.forecastClassification,
+        realisedRainfall: c.realisedRainfall,
+        realisedClassification: c.realisedClassification,
+        match: c.match,
+        type: c.type
+      }));
+      
+      leadTimeResults[leadDayName] = {
+        verifications,
+        statistics: {
+          hits: stats.correct,
+          misses: stats.missedEvents,
+          falseAlarms: stats.falseAlarms,
+          correctNegatives: stats.correctNonEvents,
+          total: stats.totalPredictions,
+          accuracy: stats.accuracy
         }
+      };
+      
+      allVerifications.push(...verifications);
     }
+    
+    // Calculate overall statistics
+    const allComparisons = [];
+    for (let i = 0; i < leadDays.length; i++) {
+      const leadDay = leadDays[i];
+      
+  // For overall stats also load warnings from the SELECTED DATE for each leadDay
+  const warningYear = year;
+  const warningMonth = month;
+  const warningDay = day;
 
-# Build all tables
-output = {
-    'success': True,
-    'date': '${date}',
-    'cached': False,
-    'day1': build_lead_time_table(verification_results, 1),
-    'day2': build_lead_time_table(verification_results, 2),
-    'day3': build_lead_time_table(verification_results, 3),
-    'day4': build_lead_time_table(verification_results, 4),
-    'day5': build_lead_time_table(verification_results, 5)
-}
-
-# Build overall table (all lead times)
-all_verifications = []
-for r in verification_results:
-    all_verifications.append({
-        'district': r['district'],
-        'forecastHeavy': r['forecast_heavy'],
-        'forecastRainfall': r['forecast_code'],
-        'observedHeavy': r['observed_heavy'],
-        'observedRainfall': r['observed_rainfall'],
-        'result': r['result_type']
-    })
-
-hits = len([r for r in verification_results if r['result_type'] == 'Hit'])
-misses = len([r for r in verification_results if r['result_type'] == 'Miss'])
-false_alarms = len([r for r in verification_results if r['result_type'] == 'False Alarm'])
-correct_negatives = len([r for r in verification_results if r['result_type'] == 'Correct Negative'])
-total = len(verification_results)
-overall_accuracy = ((hits + correct_negatives) / total * 100) if total > 0 else 0.0
-
-output['overall'] = {
-    'verifications': all_verifications,
-    'statistics': {
-        'hits': hits,
-        'misses': misses,
-        'falseAlarms': false_alarms,
-        'correctNegatives': correct_negatives,
-        'total': total,
-        'accuracy': overall_accuracy
+  const comparisons = await compareForDate(warningYear, warningMonth, warningDay, leadDay, year, month, day);
+      allComparisons.push(...comparisons);
     }
-}
-
-# Cache the result
-storage.save_verification_result('${date}', output, overall_accuracy)
-
-print(json.dumps(output))
-"`;
-
-    const { stdout, stderr } = await execAsync(pythonCommand, {
-      maxBuffer: 10 * 1024 * 1024
-    });
-
-    // Parse the JSON output from Python
-    const lines = stdout.trim().split('\n');
-    const jsonLine = lines[lines.length - 1];
-    const result = JSON.parse(jsonLine);
-
-    if (!result.success) {
-      return NextResponse.json(result, { status: 404 });
-    }
+    const overallStats = calculateAccuracy(allComparisons);
+    
+    const result = {
+      success: true,
+      date,
+      cached: false, // TODO: Add caching later
+      day1: leadTimeResults.day1,
+      day2: leadTimeResults.day2,
+      day3: leadTimeResults.day3,
+      day4: leadTimeResults.day4,
+      day5: leadTimeResults.day5,
+      overall: {
+        verifications: allVerifications,
+        statistics: {
+          hits: overallStats.correct,
+          misses: overallStats.missedEvents,
+          falseAlarms: overallStats.falseAlarms,
+          correctNegatives: overallStats.correctNonEvents,
+          total: overallStats.totalPredictions,
+          accuracy: overallStats.accuracy
+        }
+      }
+    };
 
     return NextResponse.json(result);
 

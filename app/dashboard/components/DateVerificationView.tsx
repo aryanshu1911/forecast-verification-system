@@ -1,14 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 interface DistrictVerification {
   district: string;
-  forecastHeavy: boolean;
-  forecastRainfall: number | null;
-  observedHeavy: boolean;
-  observedRainfall: number;
-  result: 'Hit' | 'Miss' | 'False Alarm' | 'Correct Negative';
+  date: string;
+  forecastCode: number | null;
+  forecastClassification: string;
+  realisedRainfall: number | null;
+  realisedClassification: string;
+  match: boolean;
+  type: 'Correct' | 'False Alarm' | 'Missed Event' | 'Correct Non-Event';
 }
 
 interface TableStatistics {
@@ -44,6 +46,7 @@ export default function DateVerificationView({
   day4,
   day5
 }: DateVerificationViewProps) {
+  const [expandedSection, setExpandedSection] = useState<string | null>('overall');
   
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -55,141 +58,145 @@ export default function DateVerificationView({
     });
   };
 
-  const getResultColor = (result: string) => {
-    switch (result) {
-      case 'Hit':
-        return 'bg-green-100 text-green-800';
-      case 'Miss':
-        return 'bg-red-100 text-red-800';
-      case 'False Alarm':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Correct Negative':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const getResultIcon = (result: string) => {
-    switch (result) {
-      case 'Hit':
-        return '✓';
-      case 'Miss':
-        return '✗';
-      case 'False Alarm':
-        return '⚠';
-      case 'Correct Negative':
-        return '○';
-      default:
-        return '';
-    }
-  };
-
   const renderVerificationTable = (
+    id: string,
     title: string,
-    data: LeadTimeTableData,
-    leadDays?: number
+    data: LeadTimeTableData
   ) => {
+    const isExpanded = expandedSection === id;
+
     if (!data || !data.verifications || data.verifications.length === 0) {
       return (
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">{title}</h3>
-          <p className="text-gray-500">No data available for this lead time.</p>
+        <div className="bg-white rounded-lg shadow-md overflow-hidden opacity-60">
+          <div className="p-4 bg-gray-50 border-b flex justify-between items-center cursor-not-allowed">
+            <h3 className="text-lg font-semibold text-gray-500">{title}</h3>
+            <span className="text-sm text-gray-400 font-medium">No Data Available</span>
+          </div>
         </div>
       );
     }
 
     return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">{title}</h3>
-          <div className="text-sm text-gray-600">
-            Accuracy: <span className="font-bold text-blue-600">{data.statistics.accuracy.toFixed(1)}%</span>
+      <div className="bg-white rounded-lg shadow-md overflow-hidden transition-all duration-200">
+        {/* Accordion Header */}
+        <button 
+          onClick={() => setExpandedSection(isExpanded ? null : id)}
+          className={`w-full p-4 flex justify-between items-center hover:bg-gray-50 transition-colors border-b ${
+            isExpanded ? 'bg-blue-50/50 border-blue-100' : 'bg-white'
+          }`}
+        >
+          <div className="flex items-center gap-4">
+            <h3 className={`text-lg font-bold ${isExpanded ? 'text-blue-700' : 'text-gray-800'}`}>
+              {title}
+            </h3>
+            {!isExpanded && (
+              <div className="hidden md:flex items-center gap-3">
+                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded">
+                  {data.statistics.accuracy.toFixed(1)}% Accuracy
+                </span>
+                <span className="text-xs text-gray-500">
+                  {data.statistics.hits} Hits • {data.statistics.misses} Misses
+                </span>
+              </div>
+            )}
           </div>
-        </div>
+          <svg 
+            className={`w-6 h-6 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-blue-500' : ''}`} 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
 
-        {/* Statistics Summary */}
-        <div className="grid grid-cols-4 gap-3 mb-4">
-          <div className="bg-green-50 rounded p-3 text-center">
-            <div className="text-2xl font-bold text-green-700">{data.statistics.hits}</div>
-            <div className="text-xs text-green-600">Hits</div>
-          </div>
-          <div className="bg-red-50 rounded p-3 text-center">
-            <div className="text-2xl font-bold text-red-700">{data.statistics.misses}</div>
-            <div className="text-xs text-red-600">Misses</div>
-          </div>
-          <div className="bg-yellow-50 rounded p-3 text-center">
-            <div className="text-2xl font-bold text-yellow-700">{data.statistics.falseAlarms}</div>
-            <div className="text-xs text-yellow-600">False Alarms</div>
-          </div>
-          <div className="bg-blue-50 rounded p-3 text-center">
-            <div className="text-2xl font-bold text-blue-700">{data.statistics.correctNegatives}</div>
-            <div className="text-xs text-blue-600">Correct Negatives</div>
-          </div>
-        </div>
+        {isExpanded && (
+          <div className="p-6 space-y-6 animate-in slide-in-from-top-2 duration-200">
+            <div className="flex justify-between items-center border-b pb-4">
+              <div className="text-sm text-gray-900 font-medium">
+                Detailed metrics and district-wise results
+              </div>
+              <div className="text-lg font-semibold text-blue-700">
+                Overall Accuracy: {data.statistics.accuracy.toFixed(1)}%
+              </div>
+            </div>
 
-        {/* Verification Table */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  District
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Forecast
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Forecast Code
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Observed
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Rainfall (mm)
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Result
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {data.verifications.map((verification, index) => (
-                <tr key={index} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    {verification.district}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      verification.forecastHeavy ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {verification.forecastHeavy ? 'Heavy' : 'Less'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700">
-                    {verification.forecastRainfall !== null ? verification.forecastRainfall.toFixed(1) : 'N/A'}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      verification.observedHeavy ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {verification.observedHeavy ? 'Heavy' : 'Less'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                    {verification.observedRainfall.toFixed(1)}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 w-fit ${getResultColor(verification.result)}`}>
-                      <span>{getResultIcon(verification.result)}</span>
-                      <span>{verification.result}</span>
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            {/* Statistics Summary */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-green-50 border border-green-100 rounded-lg p-4 text-center">
+                <div className="text-3xl font-bold text-green-700">{data.statistics.hits}</div>
+                <div className="text-xs font-bold text-green-600 uppercase tracking-wider">Hits</div>
+              </div>
+              <div className="bg-red-50 border border-red-100 rounded-lg p-4 text-center">
+                <div className="text-3xl font-bold text-red-700">{data.statistics.misses}</div>
+                <div className="text-xs font-bold text-red-600 uppercase tracking-wider">Misses</div>
+              </div>
+              <div className="bg-yellow-50 border border-yellow-100 rounded-lg p-4 text-center">
+                <div className="text-3xl font-bold text-yellow-700">{data.statistics.falseAlarms}</div>
+                <div className="text-xs font-bold text-yellow-600 uppercase tracking-wider">False Alarms</div>
+              </div>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 text-center">
+                <div className="text-3xl font-bold text-blue-700">{data.statistics.correctNegatives}</div>
+                <div className="text-xs font-bold text-blue-600 uppercase tracking-wider">Correct Negatives</div>
+              </div>
+            </div>
+
+            {/* Verification Table */}
+            <div className="overflow-x-auto rounded-lg border border-gray-100 shadow-sm">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">District</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Forecast</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Observed (mm)</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold text-black uppercase tracking-wider">Outcome</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {data.verifications.map((verification, index) => (
+                    <tr key={`${verification.district}-${index}`} className="hover:bg-gray-50 text-sm transition-colors text-black font-medium">
+                      <td className="px-4 py-3 font-bold text-black">{verification.district}</td>
+                      <td className="px-4 py-3 text-black font-semibold">{verification.date}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center justify-center w-8 h-8 rounded font-black text-xs ${
+                            verification.forecastClassification === 'XH' ? 'bg-red-900 text-white shadow-sm' :
+                            verification.forecastClassification === 'VH' ? 'bg-red-600 text-white shadow-sm' :
+                            verification.forecastClassification === 'H' ? 'bg-orange-600 text-white shadow-sm' :
+                            'bg-blue-100 text-blue-900 border border-blue-200'
+                          }`}>
+                            {verification.forecastClassification}
+                          </span>
+                          {verification.forecastCode !== null && (
+                            <span className="text-xs text-black font-black">({verification.forecastCode})</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-bold text-black">
+                        {verification.realisedRainfall !== null ? verification.realisedRainfall.toFixed(1) : 'N/A'}
+                        <span className="ml-1 text-xs text-gray-900 font-bold">({verification.realisedClassification})</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                          verification.type === 'Correct' ? 'bg-green-100 text-green-800 border-green-200' :
+                          verification.type === 'False Alarm' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                          verification.type === 'Missed Event' ? 'bg-red-100 text-red-800 border-red-200' :
+                          'bg-blue-100 text-blue-800 border-blue-200'
+                        }`}>
+                          {verification.type === 'Correct' ? '✓ Correct' :
+                           verification.type === 'False Alarm' ? '⚠ False Alarm' :
+                           verification.type === 'Missed Event' ? '✗ Missed' :
+                           '○ Correct Non-Event'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -197,46 +204,64 @@ export default function DateVerificationView({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg shadow-lg p-6 text-white">
-        <h2 className="text-2xl font-bold mb-2">
-          Verification Results for {formatDate(selectedDate)}
-        </h2>
-        <p className="text-blue-100">
-          Detailed forecast verification across all lead times (Day-1 to Day-5)
-        </p>
+      <div className="bg-gradient-to-r from-blue-700 to-indigo-800 rounded-xl shadow-lg p-8 text-white">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-black mb-1">
+              Verification Results
+            </h2>
+            <p className="text-blue-100 font-medium">
+              {formatDate(selectedDate)} • All Forecast Lead Times
+            </p>
+          </div>
+          <div className="bg-white/10 backdrop-blur-md rounded-lg px-4 py-2 border border-white/20">
+            <span className="text-xs font-bold uppercase tracking-wider opacity-70">Selected Mode:</span>
+            <div className="text-sm font-black">Lead-Time Analysis (Accordion View)</div>
+          </div>
+        </div>
       </div>
 
-      {/* Overall Table */}
-      {renderVerificationTable('Overall Verification (All Lead Times)', overall)}
-
-      {/* Lead Time Tables */}
-      <div className="grid grid-cols-1 gap-6">
-        {renderVerificationTable('Day-1 Forecast (Issued on Verification Date)', day1, 1)}
-        {renderVerificationTable('Day-2 Forecast (Issued 1 Day Before)', day2, 2)}
-        {renderVerificationTable('Day-3 Forecast (Issued 2 Days Before)', day3, 3)}
-        {renderVerificationTable('Day-4 Forecast (Issued 3 Days Before)', day4, 4)}
-        {renderVerificationTable('Day-5 Forecast (Issued 4 Days Before)', day5, 5)}
+      {/* Accordion Sections */}
+      <div className="flex flex-col gap-4">
+        {renderVerificationTable('overall', 'Overall Verification (All Lead Times)', overall)}
+        {renderVerificationTable('day1', 'Day-1 Forecast (Issued on Date)', day1)}
+        {renderVerificationTable('day2', 'Day-2 Forecast (Issued 1 Day Before)', day2)}
+        {renderVerificationTable('day3', 'Day-3 Forecast (Issued 2 Days Before)', day3)}
+        {renderVerificationTable('day4', 'Day-4 Forecast (Issued 3 Days Before)', day4)}
+        {renderVerificationTable('day5', 'Day-5 Forecast (Issued 4 Days Before)', day5)}
       </div>
 
-      {/* Legend */}
-      <div className="bg-gray-50 rounded-lg p-4">
-        <h4 className="text-sm font-semibold text-gray-700 mb-3">Result Types:</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">✓ Hit</span>
-            <span className="text-gray-600">Heavy forecasted & observed</span>
+      {/* Legend Card */}
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <h4 className="text-sm font-black text-gray-900 mb-4 uppercase tracking-widest">Verification Outcome Key</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-100">
+            <span className="w-8 h-8 flex items-center justify-center rounded-full bg-green-100 text-green-700 font-bold">✓</span>
+            <div>
+              <div className="text-sm font-bold text-green-900">Hit / Correct</div>
+              <div className="text-[10px] text-green-700 leading-tight">Rainfall matches forecast intensity category</div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-800">✗ Miss</span>
-            <span className="text-gray-600">Heavy observed, not forecasted</span>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 border border-red-100">
+            <span className="w-8 h-8 flex items-center justify-center rounded-full bg-red-100 text-red-700 font-bold">✗</span>
+            <div>
+              <div className="text-sm font-bold text-red-900">Missed Event</div>
+              <div className="text-[10px] text-red-700 leading-tight">Heavy rain observed but not forecasted</div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-1 rounded text-xs font-semibold bg-yellow-100 text-yellow-800">⚠ False Alarm</span>
-            <span className="text-gray-600">Heavy forecasted, not observed</span>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-50 border border-yellow-100">
+            <span className="w-8 h-8 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-700 font-bold">⚠</span>
+            <div>
+              <div className="text-sm font-bold text-yellow-900">False Alarm</div>
+              <div className="text-[10px] text-yellow-700 leading-tight">Heavy rain forecasted but not observed</div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-1 rounded text-xs font-semibold bg-blue-100 text-blue-800">○ Correct Negative</span>
-            <span className="text-gray-600">No heavy rain, correctly forecasted</span>
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-100">
+            <span className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-100 text-blue-700 font-bold">○</span>
+            <div>
+              <div className="text-sm font-bold text-blue-900">Correct Negative</div>
+              <div className="text-[10px] text-blue-700 leading-tight">Low rain correctly forecasted & observed</div>
+            </div>
           </div>
         </div>
       </div>

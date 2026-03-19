@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
+import { compareForDateRange, calculateAccuracy, getDistrictWiseAccuracy } from '@/app/utils/comparisonEngine';
 
 /**
  * POST /api/verification/heavy-rainfall
- * Run heavy rainfall verification with user-configurable parameters
+ * Run heavy rainfall verification using file-based storage
+ * 
+ * Supports two modes:
+ * 1. Overview mode (no selectedDay): Returns stats for all 5 lead days
+ * 2. Detailed mode (with selectedDay): Returns district-wise stats for specific day
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { threshold = 64.5, startDate, endDate, year = 2025, month = 6 } = body;
+    const { threshold = 64.5, startDate, endDate, selectedDay } = body;
 
     // Validate inputs
     if (!startDate || !endDate) {
@@ -21,57 +22,71 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Run Python verification engine
-    const pythonCommand = `cd ${process.cwd()} && source .venv/bin/activate && python3 -c "
-import sys
-sys.path.append('app/utils')
-from verificationEngine import VerificationEngine
-import json
+    // Mode 1: Detailed view for specific day
+    if (selectedDay) {
+      const leadDayCode = selectedDay; // Already in format "D1", "D2", etc.
+      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode);
+      
+      // Calculate district-wise statistics for this specific day
+      const districtStats = getDistrictWiseAccuracy(comparisons);
+      
+      const districtWise: any = {};
+      for (const [district, stats] of districtStats.entries()) {
+        districtWise[district] = {
+          H: stats.correct,
+          M: stats.missedEvents,
+          F: stats.falseAlarms,
+          CN: stats.correctNonEvents,
+          Total: stats.totalPredictions,
+          POD: stats.pod,
+          FAR: stats.far,
+          CSI: stats.csi,
+          Bias: stats.bias
+        };
+      }
 
-# Initialize engine with threshold
-engine = VerificationEngine(threshold=${threshold})
-
-# Run verification
-results = engine.verify_all_lead_times(
-    year=${year},
-    month=${month},
-    start_date='${startDate}',
-    end_date='${endDate}'
-)
-
-if results['success']:
-    # Calculate spatial accuracy
-    all_verifications = []
-    for data in results['lead_times'].values():
-        all_verifications.extend(data['verifications'])
-    
-    spatial_results = engine.calculate_spatial_accuracy(all_verifications)
-    results['spatial_accuracy'] = spatial_results
-    
-    # Remove detailed verifications to reduce payload size
-    for lead_time in results['lead_times']:
-        # Keep only scores, remove individual verifications
-        results['lead_times'][lead_time] = {
-            'scores': results['lead_times'][lead_time]['scores'],
-            'count': len(results['lead_times'][lead_time]['verifications'])
-        }
-
-print(json.dumps(results))
-"`;
-
-    const { stdout } = await execAsync(pythonCommand, {
-      maxBuffer: 10 * 1024 * 1024
-    });
-
-    const lines = stdout.trim().split('\n');
-    const jsonLine = lines[lines.length - 1];
-    const result = JSON.parse(jsonLine);
-
-    if (!result.success) {
-      return NextResponse.json(result, { status: 404 });
+      return NextResponse.json({
+        success: true,
+        threshold,
+        start_date: startDate,
+        end_date: endDate,
+        selectedDay,
+        district_wise: districtWise
+      });
     }
 
-    return NextResponse.json(result);
+    // Mode 2: Overview mode - stats for all 5 lead days
+    const leadDays = ['Day-1', 'Day-2', 'Day-3', 'Day-4', 'Day-5'];
+    const leadTimeResults: any = {};
+
+    for (const leadDay of leadDays) {
+      const leadDayCode = leadDay.replace('Day-', 'D');
+      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode);
+      const stats = calculateAccuracy(comparisons);
+
+      leadTimeResults[leadDay] = {
+        scores: {
+          H: stats.correct,
+          M: stats.missedEvents,
+          F: stats.falseAlarms,
+          CN: stats.correctNonEvents,
+          Total: stats.totalPredictions,
+          POD: stats.pod,
+          FAR: stats.far,
+          CSI: stats.csi,
+          Bias: stats.bias
+        },
+        count: stats.totalPredictions
+      };
+    }
+
+    return NextResponse.json({
+      success: true,
+      threshold,
+      start_date: startDate,
+      end_date: endDate,
+      lead_times: leadTimeResults
+    });
 
   } catch (error: any) {
     console.error('Heavy rainfall verification error:', error);
@@ -85,3 +100,4 @@ print(json.dumps(results))
     );
   }
 }
+

@@ -1,61 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import path from 'path';
-
-const execAsync = promisify(exec);
+import { getAvailableDates } from '@/app/utils/unifiedDataLoader';
 
 /**
  * GET /api/dates?year=2025&month=6
- * Returns available dates for a specific month
+ * Returns available dates for a specific month from file-based storage
  */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const year = searchParams.get('year') || '2025';
-    const month = searchParams.get('month') || '6';
+    const year = parseInt(searchParams.get('year') || '2025');
+    const month = parseInt(searchParams.get('month') || '6');
     
-    // Run Python script to get available dates
-    const pythonCommand = `cd ${process.cwd()} && source .venv/bin/activate && python3 -c "
-import sys
-sys.path.append('app/utils')
-from storageManager import StorageManager
-import json
+    // Get available dates from file storage
+    const dates = await getAvailableDates(year, month);
+    
+    // Format dates with accuracy info (no cache yet, will add later)
+    const datesWithAccuracy = dates.map(date => ({
+      date,
+      accuracy: null, // TODO: Add verification cache
+      cached: false
+    }));
 
-storage = StorageManager('data')
-dates = storage.get_available_dates(${year}, ${month})
-
-# Get cached accuracies
-metadata = storage.get_metadata()
-cache = metadata.get('verificationCache', {})
-
-dates_with_accuracy = []
-for date in dates:
-    accuracy = cache.get(date, {}).get('accuracy')
-    dates_with_accuracy.append({
-        'date': date,
-        'accuracy': accuracy,
-        'cached': accuracy is not None
-    })
-
-print(json.dumps({
-    'success': True,
-    'year': ${year},
-    'month': ${month},
-    'dates': dates_with_accuracy,
-    'total': len(dates)
-}))
-"`;
-
-    const { stdout } = await execAsync(pythonCommand, {
-      maxBuffer: 10 * 1024 * 1024
+    return NextResponse.json({
+      success: true,
+      year,
+      month,
+      dates: datesWithAccuracy,
+      total: dates.length
     });
-
-    const lines = stdout.trim().split('\n');
-    const jsonLine = lines[lines.length - 1];
-    const result = JSON.parse(jsonLine);
-
-    return NextResponse.json(result);
 
   } catch (error: any) {
     console.error('Dates error:', error);

@@ -48,16 +48,20 @@ export default function CalendarView({
   const calendarDays = generateCalendarDays();
   
   // Get day of week for first day of month (0 = Sunday, 1 = Monday, etc.)
-  const firstDayOfWeek = new Date(year, month - 1, 1).getDay();
+  // Ensure year and month are valid numbers
+  const validYear = Number.isFinite(year) ? year : new Date().getFullYear();
+  const validMonth = Number.isFinite(month) && month >= 1 && month <= 12 ? month : 1;
+  const firstDayOfWeek = new Date(validYear, validMonth - 1, 1).getDay();
   
-  // Create empty cells for days before month starts
-  const emptyCells = Array(firstDayOfWeek).fill(null);
+  // Create empty cells for days before month starts (ensure valid array length)
+  const emptyCellCount = Number.isFinite(firstDayOfWeek) && firstDayOfWeek >= 0 ? firstDayOfWeek : 0;
+  const emptyCells = Array(emptyCellCount).fill(null);
 
   const getDateClassName = (day: CalendarDay) => {
     const baseClasses = "aspect-square flex items-center justify-center rounded-lg text-sm font-medium transition-all cursor-pointer";
     
     if (!day.hasData) {
-      return `${baseClasses} bg-gray-100 text-gray-400 cursor-not-allowed`;
+      return `${baseClasses} bg-gray-100 text-gray-900 font-bold cursor-not-allowed opacity-50`;
     }
     
     if (selectedDate === day.date) {
@@ -79,7 +83,7 @@ export default function CalendarView({
         <h2 className="text-2xl font-bold text-gray-800">
           {monthNames[month - 1]} {year}
         </h2>
-        <p className="text-sm text-gray-600 mt-1">
+        <p className="text-sm text-black font-bold mt-1">
           Click on a date to view detailed verification results
         </p>
       </div>
@@ -90,7 +94,7 @@ export default function CalendarView({
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((dayName) => (
           <div
             key={dayName}
-            className="text-center text-xs font-semibold text-gray-600 py-2"
+            className="text-center text-xs font-bold text-black py-2"
           >
             {dayName}
           </div>
@@ -117,15 +121,15 @@ export default function CalendarView({
       <div className="mt-6 flex items-center gap-4 text-xs">
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 rounded bg-blue-50 border border-blue-200"></div>
-          <span className="text-gray-600">Has Data</span>
+          <span className="text-black font-bold">Has Data</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded bg-blue-600"></div>
-          <span className="text-gray-600">Selected</span>
+          <div className="w-4 h-4 rounded-full border border-blue-600 bg-blue-600"></div>
+          <span className="text-black font-bold">Selected</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded bg-gray-100"></div>
-          <span className="text-gray-600">No Data</span>
+          <div className="w-4 h-4 rounded-full border border-gray-300 bg-white"></div>
+          <span className="text-black font-bold">No Data</span>
         </div>
       </div>
     </div>

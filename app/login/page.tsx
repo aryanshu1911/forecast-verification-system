@@ -15,9 +15,8 @@ export default function LoginPage() {
 
     // Fixed credentials check
     if (credentials.username === 'imd_mumbai' && credentials.password === 'imd@mumbai') {
-      // Set authentication in localStorage
-      localStorage.setItem('imd_authenticated', 'true');
-      localStorage.setItem('imd_user', 'imd_mumbai');
+      // Set authentication cookie
+      document.cookie = 'auth_token=authenticated; path=/; max-age=86400'; // 24 hours
       toast.success('Login successful');
       router.push('/dashboard');
     } else {
@@ -35,8 +34,8 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Indian Meteorological Department
           </h1>
-          <p className="text-lg text-gray-600">Mumbai Regional Centre</p>
-          <p className="text-sm text-gray-500 mt-2">Rainfall Forecast Verification System</p>
+          <p className="text-xl text-black font-bold">Mumbai Regional Centre</p>
+          <p className="text-sm text-black font-bold mt-2 italic">Rainfall Forecast Verification System</p>
         </div>
 
         {/* Login Form */}
@@ -85,7 +84,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6 text-center text-xs text-gray-500">
+          <div className="mt-8 text-center text-xs text-black font-bold border-t pt-4">
             For official use only • Government of India
           </div>
         </div>
