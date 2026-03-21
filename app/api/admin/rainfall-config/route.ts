@@ -3,7 +3,7 @@ import {
   loadRainfallConfig,
   saveRainfallConfig,
   type RainfallConfig,
-  type RainfallClassification
+  type MultiModeClassification
 } from '@/app/utils/rainfallConfig';
 
 // Admin password (in production, use environment variable)
@@ -66,43 +66,59 @@ export async function POST(request: NextRequest) {
     //   );
     // }
     
+    // Migration: Ensure multi-mode items have parentCategory BEFORE validation
+    if (config.mode === 'multi' && config.classifications.multi && config.classifications.multi.items) {
+      config.classifications.multi.items = config.classifications.multi.items.map((item: MultiModeClassification) => ({
+        ...item,
+        parentCategory: item.parentCategory || (item.thresholdMm >= 64.5 ? 'HEAVY' : 'LOW')
+      }));
+    }
+
     // Validate each classification
     const errors: string[] = [];
     const thresholds = new Set<number>();
     
-    for (let i = 0; i < config.classifications.length; i++) {
-      const classification: RainfallClassification = config.classifications[i];
-      
-      // Validate required fields
-      if (!classification.id || !classification.variableName) {
-        errors.push(`Classification ${i + 1}: Missing id or variableName`);
-      }
-      
-      // Validate threshold
-      if (typeof classification.thresholdMm !== 'number' || classification.thresholdMm < 0) {
-        errors.push(`Classification ${i + 1}: Threshold must be a non-negative number`);
-      }
-      
-      // Check for duplicate thresholds
-      if (thresholds.has(classification.thresholdMm)) {
-        errors.push(`Classification ${i + 1}: Duplicate threshold ${classification.thresholdMm}mm`);
-      }
-      thresholds.add(classification.thresholdMm);
-      
-      // Validate codes array
-      if (!Array.isArray(classification.codes)) {
-        errors.push(`Classification ${i + 1}: Codes must be an array`);
-      } else {
-        for (const code of classification.codes) {
-          if (!Number.isInteger(code) || code < 0) {
-            errors.push(`Classification ${i + 1}: Code ${code} must be a non-negative integer`);
+    if (config.mode === 'multi') {
+      const items = config.classifications.multi.items;
+      for (let i = 0; i < items.length; i++) {
+        const classification: MultiModeClassification = items[i];
+        
+        // Validate required fields
+        if (!classification.id || !classification.variableName) {
+          errors.push(`Classification ${i + 1} (${classification.label}): Missing id or variableName`);
+        }
+        
+        // Validate threshold
+        if (typeof classification.thresholdMm !== 'number' || classification.thresholdMm < 0) {
+          errors.push(`Classification ${i + 1} (${classification.label}): Threshold must be a non-negative number`);
+        }
+        
+        // Check for duplicate thresholds
+        if (thresholds.has(classification.thresholdMm)) {
+          errors.push(`Classification ${i + 1} (${classification.label}): Duplicate threshold ${classification.thresholdMm}mm`);
+        }
+        thresholds.add(classification.thresholdMm);
+        
+        // Validate codes array
+        if (!Array.isArray(classification.codes)) {
+          errors.push(`Classification ${i + 1} (${classification.label}): Codes must be an array`);
+        } else {
+          for (const code of classification.codes) {
+            if (!Number.isInteger(code) || code < 0) {
+              errors.push(`Classification ${i + 1} (${classification.label}): Code ${code} must be a non-negative integer`);
+            }
           }
         }
-      }
-      
-      // Validate order
-      if (typeof classification.order !== 'number') {
-        errors.push(`Classification ${i + 1}: Order must be a number`);
+        
+        // Validate order
+        if (typeof classification.order !== 'number') {
+          errors.push(`Classification ${i + 1} (${classification.label}): Order must be a number`);
+        }
+
+        // Validate parentCategory (now should be present due to migration above)
+        if (!classification.parentCategory || (classification.parentCategory !== 'LOW' && classification.parentCategory !== 'HEAVY')) {
+          errors.push(`Classification ${i + 1} (${classification.label}): Parent category must be LOW or HEAVY`);
+        }
       }
     }
     
@@ -131,8 +147,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to save configuration',
-        details: error.message
+        error: 'Server error saving configuration',
+        details: error.message || error.toString()
       },
       { status: 500 }
     );

@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     // Mode 1: Detailed view for specific day
     if (selectedDay) {
       const leadDayCode = selectedDay; // Already in format "D1", "D2", etc.
-      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode);
+      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode, threshold);
       
       // Calculate district-wise statistics for this specific day
       const districtStats = getDistrictWiseAccuracy(comparisons);
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
           H: stats.correct,
           M: stats.missedEvents,
           F: stats.falseAlarms,
-          CN: stats.correctNonEvents,
+          CN: stats.correctNegatives,
           Total: stats.totalPredictions,
           POD: stats.pod,
           FAR: stats.far,
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     for (const leadDay of leadDays) {
       const leadDayCode = leadDay.replace('Day-', 'D');
-      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode);
+      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode, threshold);
       const stats = calculateAccuracy(comparisons);
 
       leadTimeResults[leadDay] = {
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
           H: stats.correct,
           M: stats.missedEvents,
           F: stats.falseAlarms,
-          CN: stats.correctNonEvents,
+          CN: stats.correctNegatives,
           Total: stats.totalPredictions,
           POD: stats.pod,
           FAR: stats.far,

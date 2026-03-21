@@ -7,10 +7,12 @@ interface DistrictVerification {
   date: string;
   forecastCode: number | null;
   forecastClassification: string;
+  forecastLevel: number;
   realisedRainfall: number | null;
   realisedClassification: string;
+  realisedLevel: number;
   match: boolean;
-  type: 'Correct' | 'False Alarm' | 'Missed Event' | 'Correct Non-Event';
+  type: 'Correct' | 'False Alarm' | 'Missed Event' | 'Correct Negative';
 }
 
 interface TableStatistics {
@@ -160,34 +162,45 @@ export default function DateVerificationView({
                       <td className="px-4 py-3 text-black font-semibold">{verification.date}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <span className={`inline-flex items-center justify-center w-8 h-8 rounded font-black text-xs ${
-                            verification.forecastClassification === 'XH' ? 'bg-red-900 text-white shadow-sm' :
-                            verification.forecastClassification === 'VH' ? 'bg-red-600 text-white shadow-sm' :
-                            verification.forecastClassification === 'H' ? 'bg-orange-600 text-white shadow-sm' :
+                          {verification.forecastCode !== null ? (
+                            <span className="font-bold text-black">{verification.forecastCode}</span>
+                          ) : (
+                            <span className="text-gray-400 font-bold">—</span>
+                          )}
+                          <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded font-black text-[10px] ${
+                            verification.forecastLevel >= 5 ? 'bg-red-900 text-white shadow-sm' :
+                            verification.forecastLevel === 4 ? 'bg-red-600 text-white shadow-sm' :
+                            verification.forecastLevel === 3 ? 'bg-orange-600 text-white shadow-sm' :
+                            verification.forecastLevel === 2 ? 'bg-yellow-100 text-yellow-900 border border-yellow-200' :
                             'bg-blue-100 text-blue-900 border border-blue-200'
                           }`}>
-                            {verification.forecastClassification}
+                            {verification.forecastLevel}: {verification.forecastClassification}
                           </span>
-                          {verification.forecastCode !== null && (
-                            <span className="text-xs text-black font-black">({verification.forecastCode})</span>
-                          )}
                         </div>
                       </td>
                       <td className="px-4 py-3 font-bold text-black">
                         {verification.realisedRainfall !== null ? verification.realisedRainfall.toFixed(1) : 'N/A'}
-                        <span className="ml-1 text-xs text-gray-900 font-bold">({verification.realisedClassification})</span>
+                        <span className={`ml-1 text-xs font-bold inline-flex items-center justify-center px-1 py-0.5 rounded ${
+                          verification.realisedLevel >= 5 ? 'bg-red-900 text-white' :
+                          verification.realisedLevel === 4 ? 'bg-red-600 text-white' :
+                          verification.realisedLevel === 3 ? 'bg-orange-500 text-white' :
+                          verification.realisedLevel === 2 ? 'bg-yellow-100 text-yellow-900 border border-yellow-200' :
+                          'bg-blue-100 text-blue-900 border border-blue-200'
+                        }`}>({verification.realisedLevel}: {verification.realisedClassification})</span>
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${
-                          verification.type === 'Correct' ? 'bg-green-100 text-green-800 border-green-200' :
+                          verification.type === 'Correct' ? (
+                            verification.match ? 'bg-green-100 text-green-800 border-green-200' : 'bg-green-50 text-green-700 border-green-200 border-dashed'
+                          ) :
                           verification.type === 'False Alarm' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
                           verification.type === 'Missed Event' ? 'bg-red-100 text-red-800 border-red-200' :
                           'bg-blue-100 text-blue-800 border-blue-200'
                         }`}>
-                          {verification.type === 'Correct' ? '✓ Correct' :
+                          {verification.type === 'Correct' ? '✓ Hit' :
                            verification.type === 'False Alarm' ? '⚠ False Alarm' :
                            verification.type === 'Missed Event' ? '✗ Missed' :
-                           '○ Correct Non-Event'}
+                           '○ Correct Negative'}
                         </span>
                       </td>
                     </tr>

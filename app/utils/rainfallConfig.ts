@@ -17,7 +17,6 @@ export interface DualModeConfig {
   };
 }
 
-// Multi Mode Classification Item
 export interface MultiModeClassification {
   id: string;
   variableName: string;
@@ -26,6 +25,8 @@ export interface MultiModeClassification {
   codes: number[];
   enabled: boolean;
   order: number;
+  level: number;
+  parentCategory: 'LOW' | 'HEAVY';
 }
 
 // Multi Mode Configuration
@@ -65,11 +66,19 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
     const fileContent = await fs.promises.readFile(CONFIG_PATH, 'utf-8');
     const config: RainfallConfig = JSON.parse(fileContent);
     
-    // Validate config structure
-    if (!config.mode || !config.classifications) {
-      throw new Error('Invalid configuration structure');
+    // Migration: Ensure multi-mode items have parentCategory
+    if (config.classifications.multi && config.classifications.multi.items) {
+      config.classifications.multi.items = config.classifications.multi.items.map(item => {
+        if (!item.parentCategory) {
+          return {
+            ...item,
+            parentCategory: item.thresholdMm >= 64.5 ? 'HEAVY' : 'LOW'
+          };
+        }
+        return item;
+      });
     }
-    
+
     configCache = config;
     cacheTimestamp = now;
     
@@ -93,22 +102,48 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
           enabled: false,
           items: [
             {
+              id: 'VL',
+              variableName: 'VL',
+              label: 'Very Light',
+              thresholdMm: 0.1,
+              codes: [2, 3],
+              enabled: true,
+              order: 1,
+              level: 1,
+              parentCategory: 'LOW'
+            },
+            {
               id: 'L',
               variableName: 'L',
-              label: 'Less',
-              thresholdMm: 0.0,
-              codes: [],
+              label: 'Light',
+              thresholdMm: 2.5,
+              codes: [4],
               enabled: true,
-              order: 1
+              order: 2,
+              level: 2,
+              parentCategory: 'LOW'
+            },
+            {
+              id: 'M',
+              variableName: 'M',
+              label: 'Moderate',
+              thresholdMm: 15.6,
+              codes: [5, 6, 7],
+              enabled: true,
+              order: 3,
+              level: 3,
+              parentCategory: 'LOW'
             },
             {
               id: 'H',
               variableName: 'H',
               label: 'Heavy',
               thresholdMm: 64.5,
-              codes: [5, 6, 7, 27, 33, 37, 45, 56],
+              codes: [27, 33, 37, 45, 56],
               enabled: true,
-              order: 2
+              order: 4,
+              level: 4,
+              parentCategory: 'HEAVY'
             },
             {
               id: 'VH',
@@ -117,7 +152,9 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
               thresholdMm: 115.6,
               codes: [8, 9, 10, 11, 12, 25, 28, 34, 39, 44],
               enabled: true,
-              order: 3
+              order: 5,
+              level: 5,
+              parentCategory: 'HEAVY'
             },
             {
               id: 'XH',
@@ -126,7 +163,9 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
               thresholdMm: 204.5,
               codes: [26, 29, 35, 38],
               enabled: true,
-              order: 4
+              order: 6,
+              level: 6,
+              parentCategory: 'HEAVY'
             }
           ]
         }
@@ -315,4 +354,30 @@ export async function getPublicClassificationInfo(): Promise<{
     mode: config.mode,
     availableLabels
   };
+}
+/**
+ * Get the numeric level of a classification label
+ */
+export async function getLevelByLabel(label: string): Promise<number> {
+  const config = await loadRainfallConfig();
+  
+  if (config.mode === 'dual') {
+    return label === config.classifications.dual.labels.above ? 2 : 1;
+  } else {
+    const item = config.classifications.multi.items.find(i => i.variableName === label);
+    return item ? item.level : 1;
+  }
+}
+/**
+ * Get the parent category (LOW/HEAVY) of a classification label
+ */
+export async function getParentCategoryByLabel(label: string): Promise<'LOW' | 'HEAVY'> {
+  const config = await loadRainfallConfig();
+  
+  if (config.mode === 'dual') {
+    return label === config.classifications.dual.labels.above ? 'HEAVY' : 'LOW';
+  } else {
+    const item = config.classifications.multi.items.find(i => i.variableName === label);
+    return item ? item.parentCategory : 'LOW';
+  }
 }

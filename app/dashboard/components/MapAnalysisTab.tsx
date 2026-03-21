@@ -29,13 +29,12 @@ export default function MapAnalysisTab() {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [rainfallData, setRainfallData] = useState<DistrictRainfall[]>([]);
-  const [metric, setMetric] = useState<'rainfall' | 'pod' | 'far' | 'bias' | 'csi' | 'subdivision'>('rainfall');
+  const [metric, setMetric] = useState<'rainfall' | 'pod' | 'far' | 'bias' | 'csi' | 'subdivision' | 'accuracy'>('rainfall');
   const [metricData, setMetricData] = useState<Record<string, any>>({});
   const [leadDay, setLeadDay] = useState<string>('D1');
   const [isLoading, setIsLoading] = useState(false);
-  const [classificationMode, setClassificationMode] = useState<'dual' | 'multi'>('multi');
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
-  const { config } = useRainfallConfig();
+  const { config, reload: reloadConfig } = useRainfallConfig();
 
   // Set default date to today
   useEffect(() => {
@@ -77,21 +76,8 @@ export default function MapAnalysisTab() {
     return null;
   };
 
-  // Fetch current classification mode on mount
-  useEffect(() => {
-    const fetchClassificationMode = async () => {
-      try {
-        const response = await fetch('/api/rainfall-mode');
-        const data = await response.json();
-        if (response.ok && data.mode) {
-          setClassificationMode(data.mode);
-        }
-      } catch (error) {
-        console.error('Error fetching classification mode:', error);
-      }
-    };
-    fetchClassificationMode();
-  }, []);
+  // Effect to sync with global config mode if needed
+  // (Previously fetched from /api/rainfall-mode redundantly)
 
   const fetchRainfallData = async (view: 'daily' | 'monthly', value: string) => {
     setIsLoading(true);
@@ -148,7 +134,7 @@ export default function MapAnalysisTab() {
   };
 
   const handleClassificationModeChange = async (mode: 'dual' | 'multi') => {
-    if (mode === classificationMode) return;
+    if (mode === config?.mode) return;
     
     setIsSwitchingMode(true);
     try {
@@ -161,7 +147,7 @@ export default function MapAnalysisTab() {
       const result = await response.json();
 
       if (response.ok) {
-        setClassificationMode(mode);
+        await reloadConfig(); // Refresh global config
         toast.success(`Switched to ${mode === 'dual' ? 'Dual' : 'Multi'} classification mode`);
         
         // Refresh data
@@ -203,57 +189,35 @@ export default function MapAnalysisTab() {
         );
       }
 
-      if (!config) return null;
-      
-      let categories = [];
-      if (config.mode === 'dual') {
-        categories = [
-          { name: config.classifications.dual.labels.below, color: '#FFFFE0', range: `< ${config.classifications.dual.threshold} mm` },
-          { name: config.classifications.dual.labels.above, color: '#FFA500', range: `>= ${config.classifications.dual.threshold} mm` }
-        ];
-      } else {
-        categories = config.classifications.multi.items
-          .filter(item => item.enabled)
-          .sort((a, b) => a.order - b.order)
-          .map(item => {
-            let color = '#FFFFE0';
-            if (item.variableName === 'XH') color = '#8B0000';
-            else if (item.variableName === 'VH') color = '#FF0000';
-            else if (item.variableName === 'H') color = '#FFA500';
-            
-            // Find next threshold for range
-            const nextItem = config.classifications.multi.items
-              .filter(i => i.enabled && i.thresholdMm > item.thresholdMm)
-              .sort((a, b) => a.thresholdMm - b.thresholdMm)[0];
-              
-            const range = nextItem 
-              ? `${item.thresholdMm}-${nextItem.thresholdMm - 0.1} mm`
-              : `>= ${item.thresholdMm} mm`;
-              
-            return { name: item.label, color, range };
-          });
-      }
+      // Fixed 100mm bands for daily view
+      const bands = [
+        { range: '0 - 100 mm', color: '#E3F2FD' },
+        { range: '100 - 200 mm', color: '#90CAF9' },
+        { range: '200 - 300 mm', color: '#42A5F5' },
+        { range: '300 - 400 mm', color: '#1E88E5' },
+        { range: '400 - 500 mm', color: '#1565C0' },
+        { range: '500 - 600 mm', color: '#FDD835' },
+        { range: '600 - 700 mm', color: '#FB8C00' },
+        { range: '700 - 800 mm', color: '#E53935' },
+        { range: '800 - 900 mm', color: '#B71C1C' },
+        { range: '> 900 mm', color: '#4A148C' },
+      ];
 
       return (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-6 h-6 rounded border border-gray-300 bg-[#D3D3D3]"></div>
-            <div>
-              <div className="text-sm font-bold text-black">No Rainfall</div>
-              <div className="text-xs text-gray-900 font-semibold">0 mm</div>
-            </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded border border-gray-300 bg-[#D3D3D3]" />
+            <span className="text-xs text-gray-700 font-medium">No Data (0 mm)</span>
           </div>
-          {categories.map((cat) => (
-            <div key={cat.name} className="flex items-center gap-3">
-              <div className="w-6 h-6 rounded border border-gray-300" style={{ backgroundColor: cat.color }}></div>
-              <div>
-                <div className="text-sm font-bold text-black">{cat.name}</div>
-                <div className="text-xs text-gray-900 font-semibold">{cat.range}</div>
-              </div>
+          {bands.map((band) => (
+            <div key={band.range} className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded border border-gray-300 flex-shrink-0" style={{ backgroundColor: band.color }} />
+              <span className="text-xs text-gray-700 font-medium">{band.range}</span>
             </div>
           ))}
         </div>
       );
+
     }
     
     if (metric === 'subdivision') {
@@ -317,13 +281,13 @@ export default function MapAnalysisTab() {
             <div>
               <label className="block text-xs font-bold text-black uppercase mb-2">Classification</label>
               <select 
-                value={classificationMode} 
+                value={config?.mode || 'multi'} 
                 onChange={(e) => handleClassificationModeChange(e.target.value as any)}
-                disabled={isSwitchingMode}
+                disabled={isSwitchingMode || !config}
                 className="w-full px-3 py-2 border border-gray-400 rounded-md text-sm text-black font-semibold"
               >
-                <option value="dual">Dual Mode (L/H)</option>
-                <option value="multi">Multi Mode (L/H/VH/XH)</option>
+                <option value="dual">Dual Mode (Binary)</option>
+                <option value="multi">Multi Mode (Categorical)</option>
               </select>
             </div>
           </div>
@@ -357,7 +321,7 @@ export default function MapAnalysisTab() {
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Active Metric</label>
             <div className="grid grid-cols-3 gap-2">
-              {['rainfall', 'pod', 'far', 'bias', 'csi', 'subdivision'].map((m) => (
+              {['rainfall', 'pod', 'far', 'bias', 'csi', 'subdivision', 'accuracy'].map((m) => (
                 <button
                   key={m}
                   onClick={() => setMetric(m as any)}

@@ -19,7 +19,7 @@ export async function downloadChartAsImage(
   try {
     // Capture the element as a canvas
     const canvas = await html2canvas(element, {
-      backgroundColor: '#ffffff',
+      background: '#ffffff',
       scale: 2, // Higher quality image
       logging: false,
       useCORS: true,

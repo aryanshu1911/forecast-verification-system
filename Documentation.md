@@ -45,8 +45,8 @@ The application uses a simple, secure authentication mechanism for officials.
 The system maps IMD numeric warning codes to qualitative classifications (`L`, `H`, `VH`, `XH`).
 - **Location**: `app/utils/rainfallConfig.ts`
 - **Logic**:
-  - **Dual Mode**: Binary classification (Below 64.5mm = L, Above = H).
-  - **Multi Mode**: Categorizes into Low (L), Heavy (H), Very Heavy (VH), and Extremely Heavy (XH) based on IMD data codes (e.g., Codes 5, 27 are H; Codes 26, 35 are XH).
+  - **Multi Mode**: Categorizes rainfall into custom ordinal levels (e.g., Level 1: L, Level 2: H, Level 3: VH, Level 4: XH).
+  - **Numeric Levels**: Admins can assign numeric levels (1, 2, 3...) to each category. Higher numbers denote higher intensity. These levels are used to determine "Exact Hits" vs "Category Hits".
 
 ### B. Shifted Verification (D+1) Logic
 Verification follows the IMD methodology where a forecast issued on day **D** is verified against the actual rainfall recorded on day **D+1** (08:30 IST).
@@ -75,5 +75,9 @@ Handles inconsistent district names (e.g., "Mumbai City" vs "MUMBAI") to ensure 
 ---
 
 ## 4. Troubleshooting and Logic Implementation
-- **Hit Determination in Multi-Mode**: To maintain compatibility with binary skill scores, the logic treats *any* "Heavy" forecast (H, VH, or XH) as a hit if the observed rainfall was also in *any* "Heavy" category (even if they don't match exactly).
+- **Hit Determination in Multi-Mode**: The logic uses numeric levels to evaluate accuracy. 
+  - **Level 1** is considered "No Event" (Low).
+  - **Level > 1** is considered an "Event" (Heavy).
+  - If `forecastLevel === realisedLevel`, it is an **Exact Hit**.
+  - If both levels are > 1 but different, it is a **Category Hit** (counted as a hit for POD/FAR).
 - **State Colors**: Controlled dynamically by `app/utils/rainfallColors.ts` based on current classification thresholds.

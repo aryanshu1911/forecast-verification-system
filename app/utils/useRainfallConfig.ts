@@ -24,6 +24,8 @@ export interface MultiModeClassification {
   codes: number[];
   enabled: boolean;
   order: number;
+  level: number;
+  parentCategory: 'LOW' | 'HEAVY';
 }
 
 export interface MultiModeConfig {

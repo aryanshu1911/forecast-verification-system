@@ -24,7 +24,7 @@ interface MapVisualizationProps {
   viewMode: 'daily' | 'monthly';
   selectedDate: string;
   selectedMonth: string;
-  metric?: 'rainfall' | 'pod' | 'far' | 'bias' | 'csi' | 'subdivision';
+  metric?: 'rainfall' | 'pod' | 'far' | 'bias' | 'csi' | 'subdivision' | 'accuracy';
   metricData?: Record<string, any>;
 }
 
@@ -143,6 +143,14 @@ export default function MapVisualization({
       if (val >= 0.6) return '#22c55e';
       if (val >= 0.4) return '#86efac';
       if (val >= 0.2) return '#dcfce7';
+      return '#f0fdf4';
+    }
+    if (metric === 'accuracy') {
+      // Green scale for Accuracy (High is good) - same as POD
+      if (val >= 90) return '#166534';
+      if (val >= 80) return '#22c55e';
+      if (val >= 70) return '#86efac';
+      if (val >= 60) return '#dcfce7';
       return '#f0fdf4';
     }
     if (metric === 'far') {

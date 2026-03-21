@@ -12,7 +12,9 @@ export interface RainfallCategory {
 
 export const RAINFALL_CATEGORIES: RainfallCategory[] = [
   { name: 'No Rainfall', color: '#D3D3D3', min: 0, max: 0 },
-  { name: 'Moderate', color: '#FFFFE0', min: 0.1, max: 64.4 },
+  { name: 'Very Light', color: '#E1F5FE', min: 0.1, max: 2.4 },
+  { name: 'Light', color: '#FFFFE0', min: 2.5, max: 15.5 },
+  { name: 'Moderate', color: '#FFFF00', min: 15.6, max: 64.4 },
   { name: 'Heavy', color: '#FFA500', min: 64.5, max: 115.5 },
   { name: 'Very Heavy', color: '#FF0000', min: 115.6, max: 204.4 },
   { name: 'Extremely Heavy', color: '#8B0000', min: 204.5, max: null },
@@ -22,11 +24,13 @@ export const RAINFALL_CATEGORIES: RainfallCategory[] = [
  * Get color based on rainfall value
  */
 export function getRainfallColor(value: number): string {
-  if (value === 0) return '#D3D3D3'; // No Rainfall
-  if (value < 64.5) return '#FFFFE0'; // Moderate
-  if (value <= 115.5) return '#FFA500'; // Heavy
-  if (value <= 204.4) return '#FF0000'; // Very Heavy
-  return '#8B0000'; // Extremely Heavy
+  if (value === 0) return '#D3D3D3';
+  if (value <= 2.4) return '#E1F5FE';
+  if (value <= 15.5) return '#FFFFE0';
+  if (value <= 64.4) return '#FFFF00';
+  if (value <= 115.5) return '#FFA500';
+  if (value <= 204.4) return '#FF0000';
+  return '#8B0000';
 }
 
 /**
@@ -34,10 +38,12 @@ export function getRainfallColor(value: number): string {
  */
 export function getRainfallCategory(value: number): string {
   if (value === 0) return 'No Rainfall';
-  if (value < 64.5) return 'Moderate Rainfall';
-  if (value <= 115.5) return 'Heavy Rainfall';
-  if (value <= 204.4) return 'Very Heavy Rainfall';
-  return 'Extremely Heavy Rainfall';
+  if (value <= 2.4) return 'Very Light Rain';
+  if (value <= 15.5) return 'Light Rain';
+  if (value <= 64.4) return 'Moderate Rain';
+  if (value <= 115.5) return 'Heavy Rain';
+  if (value <= 204.4) return 'Very Heavy Rain';
+  return 'Extremely Heavy Rain';
 }
 
 /**
@@ -92,34 +98,21 @@ export function getMonthlyRainfallCategory(value: number): string {
 }
 
 /**
- * Get color based on rainfall value and current config
+ * Get color based on rainfall value using fixed 100mm bands
+ * Matches the map legend: 0-100, 100-200, ..., >900
  */
-export function getRainfallColorDynamic(rainfall: number, config: any): string {
-  // Check if rainfallData is monthly - this depends on how it's called
-  // but let's keep it daily-focused for now and use specific monthly functions in the component
-  if (rainfall === 0) return '#D3D3D3';
-
-  if (config.mode === 'dual') {
-    const threshold = config.classifications.dual.threshold;
-    return rainfall >= threshold ? '#FFA500' : '#FFFFE0'; // Heavy vs Moderate
-  } else {
-    // Multi-mode: Find highest enabled threshold
-    const items = [...config.classifications.multi.items]
-      .filter(i => i.enabled)
-      .sort((a, b) => b.thresholdMm - a.thresholdMm);
-    
-    for (const item of items) {
-      if (rainfall >= item.thresholdMm) {
-        // Map common labels to colors
-        if (item.variableName === 'XH') return '#8B0000'; // Extremely Heavy
-        if (item.variableName === 'VH') return '#FF0000'; // Very Heavy
-        if (item.variableName === 'H') return '#FFA500';  // Heavy
-        if (item.variableName === 'L') return '#FFFFE0';  // Less/Moderate
-        break;
-      }
-    }
-    return '#FFFFE0'; // Default
-  }
+export function getRainfallColorDynamic(rainfall: number, config?: any): string {
+  if (rainfall === 0) return '#D3D3D3'; // No data / no rain
+  if (rainfall <= 100) return '#E3F2FD';
+  if (rainfall <= 200) return '#90CAF9';
+  if (rainfall <= 300) return '#42A5F5';
+  if (rainfall <= 400) return '#1E88E5';
+  if (rainfall <= 500) return '#1565C0';
+  if (rainfall <= 600) return '#FDD835';
+  if (rainfall <= 700) return '#FB8C00';
+  if (rainfall <= 800) return '#E53935';
+  if (rainfall <= 900) return '#B71C1C';
+  return '#4A148C'; // > 900
 }
 
 /**

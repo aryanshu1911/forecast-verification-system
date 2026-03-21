@@ -17,6 +17,7 @@ import {
   Cell
 } from 'recharts';
 import { downloadChartAsImage, generateChartFileName } from '@/app/utils/chartDownloadUtils';
+import { useRainfallConfig } from '@/app/utils/useRainfallConfig';
 
 // ─── Maharashtra Meteorological Subdivisions ─────────────────────────────────
 // Based on IMD Maharashtra meteorological subdivision classifications.
@@ -103,6 +104,7 @@ export default function AnalysisTab() {
   const [isLoading, setIsLoading] = useState(false);
   const [dayWiseData, setDayWiseData] = useState<DayWiseData | null>(null);
   const [comparisonData, setComparisonData] = useState<ComparisonData | null>(null);
+  const { config, isLoading: configLoading } = useRainfallConfig();
 
   const runAnalysis = async () => {
     setIsLoading(true);
@@ -259,16 +261,36 @@ export default function AnalysisTab() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div>
             <label className="block text-sm font-bold text-black mb-2">
-              Heavy Rainfall Threshold (mm)
+              Verification Mode
             </label>
-            <input
-              type="number"
-              value={threshold}
-              onChange={(e) => setThreshold(parseFloat(e.target.value))}
-              step="0.1"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
-            />
-            <p className="text-xs text-black font-bold mt-1">Default: 64.5mm</p>
+            <div className={`px-3 py-2 border rounded-md font-bold text-sm ${config?.mode === 'multi' ? 'bg-purple-50 border-purple-200 text-purple-700' : 'bg-blue-50 border-blue-200 text-blue-700'}`}>
+              {configLoading ? 'Loading Mode...' : (config?.mode === 'multi' ? 'Multi Mode (Categorical)' : 'Dual Mode (Binary)')}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-black mb-2">
+              {config?.mode === 'multi' ? 'Threshold Info' : 'Heavy Rainfall Threshold (mm)'}
+            </label>
+            {config?.mode === 'multi' ? (
+              <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600 font-bold">
+                Managed in Admin Config
+              </div>
+            ) : (
+              <>
+                <input
+                  type="number"
+                  value={isNaN(threshold) ? '' : threshold}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setThreshold(val);
+                  }}
+                  step="0.1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                />
+                <p className="text-xs text-black font-bold mt-1">Default: 64.5mm</p>
+              </>
+            )}
           </div>
 
           <div>
@@ -380,8 +402,10 @@ export default function AnalysisTab() {
                 </span>
               </div>
               <div>
-                <span className="text-black font-bold">Threshold:</span>
-                <span className="ml-2 font-black text-black">{dayWiseData.threshold}mm</span>
+                <span className="text-black font-bold">Threshold/Method:</span>
+                <span className="ml-2 font-black text-black">
+                  {config?.mode === 'multi' ? 'Multi-Category' : `${dayWiseData.threshold}mm`}
+                </span>
               </div>
               <div>
                 <span className="text-black font-bold">Districts:</span>
@@ -744,8 +768,10 @@ export default function AnalysisTab() {
                 </span>
               </div>
               <div>
-                <span className="text-black font-bold">Threshold:</span>
-                <span className="ml-2 font-black text-black">{comparisonData.threshold}mm</span>
+                <span className="text-black font-bold">Threshold/Method:</span>
+                <span className="ml-2 font-black text-black">
+                  {config?.mode === 'multi' ? 'Multi-Category' : `${comparisonData.threshold}mm`}
+                </span>
               </div>
               <div>
                 <span className="text-black font-bold">Days Compared:</span>

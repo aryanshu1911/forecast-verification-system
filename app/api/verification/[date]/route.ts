@@ -26,31 +26,40 @@ export async function GET(
     // Parse date - this is the SELECTED DATE (e.g., June 11)
     const { year, month, day } = parseDate(date);
     
+    // FINAL LOGIC:
+    // When 11th June is selected:
+    // 1. Forecast/Warning Source: Use the SELECTED DATE (June 11) for ALL lead days (D1-D5).
+    //    This fetches data/warning/D[1-5]/2025-06-11.
+    // 2. Realized/Observed Data: Use the SELECTED DATE + 1 (June 12) for ALL lead days.
+    //    All tables (D1-D5) will show the same observed data from June 12.
+    
     // NEW LOGIC:
     // - Realized data is always from SELECTED DATE + 1 (e.g., June 12)
-    // - Warning data goes backwards from SELECTED DATE:
-    //   D1 = Selected Date (June 11)
-    //   D2 = Selected Date - 1 day (June 10)
-    //   D3 = Selected Date - 2 days (June 9)
-    //   D4 = Selected Date - 3 days (June 8)
-    //   D5 = Selected Date - 4 days (June 7)
-    
+    // - Warning data is always from the SAME SELECTED DATE (e.g., June 11)
+    //   but fetched from different lead-day folders:
+    //   D1 = Forecast issued on June 11
+    //   D2 = Forecast issued on June 11
+    //   ... etc.
+  
     // Calculate verification for all lead days
     const leadDays = ['D1', 'D2', 'D3', 'D4', 'D5'];
     const leadTimeResults: any = {};
     const allVerifications: any[] = [];
     
+    // Target date for REALIZED data (Selected Date + 1)
+    const targetDate = new Date(year, month - 1, day);
+    targetDate.setDate(targetDate.getDate() + 1);
+    const targetYear = targetDate.getFullYear();
+    const targetMonth = targetDate.getMonth() + 1;
+    const targetDay = targetDate.getDate();
+    
     for (let i = 0; i < leadDays.length; i++) {
       const leadDay = leadDays[i];
       const leadDayName = `day${i + 1}`;
       
-  // WARNING SOURCE: use the SELECTED DATE for all leadDays (D1..D5)
-  // i.e., load from data/warning/<leadDay>/<selectedDate>
-  const warningYear = year;
-  const warningMonth = month;
-  const warningDay = day;
-
-  const comparisons = await compareForDate(warningYear, warningMonth, warningDay, leadDay, year, month, day);
+      // WARNING SOURCE: Always use the SELECTED DATE (e.g., June 11)
+      // REALIZED SOURCE: Always use the SELECTED DATE + 1 (calculated above as targetYear/Month/Day)
+      const comparisons = await compareForDate(year, month, day, leadDay, targetYear, targetMonth, targetDay);
       const stats = calculateAccuracy(comparisons);
       
       // Format verifications for UI - use new comparison structure
@@ -59,8 +68,10 @@ export async function GET(
         date: c.date,
         forecastCode: c.forecastCode,
         forecastClassification: c.forecastClassification,
+        forecastLevel: c.forecastLevel,
         realisedRainfall: c.realisedRainfall,
         realisedClassification: c.realisedClassification,
+        realisedLevel: c.realisedLevel,
         match: c.match,
         type: c.type
       }));
@@ -71,7 +82,7 @@ export async function GET(
           hits: stats.correct,
           misses: stats.missedEvents,
           falseAlarms: stats.falseAlarms,
-          correctNegatives: stats.correctNonEvents,
+          correctNegatives: stats.correctNegatives,
           total: stats.totalPredictions,
           accuracy: stats.accuracy
         }
@@ -85,12 +96,8 @@ export async function GET(
     for (let i = 0; i < leadDays.length; i++) {
       const leadDay = leadDays[i];
       
-  // For overall stats also load warnings from the SELECTED DATE for each leadDay
-  const warningYear = year;
-  const warningMonth = month;
-  const warningDay = day;
-
-  const comparisons = await compareForDate(warningYear, warningMonth, warningDay, leadDay, year, month, day);
+      // Same logic for overall stats
+      const comparisons = await compareForDate(year, month, day, leadDay, targetYear, targetMonth, targetDay);
       allComparisons.push(...comparisons);
     }
     const overallStats = calculateAccuracy(allComparisons);
@@ -110,7 +117,7 @@ export async function GET(
           hits: overallStats.correct,
           misses: overallStats.missedEvents,
           falseAlarms: overallStats.falseAlarms,
-          correctNegatives: overallStats.correctNonEvents,
+          correctNegatives: overallStats.correctNegatives,
           total: overallStats.totalPredictions,
           accuracy: overallStats.accuracy
         }
