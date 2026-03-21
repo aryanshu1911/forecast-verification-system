@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { processWarningUpload, processMultiSheetWarningUpload } from '@/app/utils/uploadProcessor';
+import { clearCache } from '@/app/utils/unifiedDataLoader';
 import * as XLSX from 'xlsx';
 
 export async function POST(request: NextRequest) {
@@ -85,6 +86,9 @@ export async function POST(request: NextRequest) {
       summary = await processWarningUpload(buffer, { year, month, leadDay });
     }
     
+    // Clear data cache
+    clearCache();
+
     // Return success response
     return NextResponse.json({
       success: true,
