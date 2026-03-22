@@ -23,7 +23,7 @@ export async function downloadChartAsImage(
       scale: 2, // Higher quality image
       logging: false,
       useCORS: true,
-    });
+    } as any);
 
     // Convert canvas to blob
     canvas.toBlob((blob) => {

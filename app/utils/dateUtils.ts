@@ -106,22 +106,16 @@ export function calculateIssueDate(
 }
 
 /**
- * CRITICAL: Calculate verification date using IMD's shifted verification methodology (D+1)
+ * CRITICAL: Calculate verification date (always Issue Date + 1)
  * 
- * IMD Shifted Verification Logic:
- * - Warning issued on Day D is verified against realised data from Day D+1
- * - D1 forecast issued on June 1 → verifies with June 2 realised data
- * - D2 forecast issued on June 1 → verifies with June 3 realised data
- * - D3 forecast issued on June 1 → verifies with June 4 realised data
- * - D4 forecast issued on June 1 → verifies with June 5 realised data
- * - D5 forecast issued on June 1 → verifies with June 6 realised data
- * 
- * Formula: Verification Date = Issue Date + Lead Day Number
+ * NEW LOGIC (Global):
+ * - All lead times (D1-D5) are verified against realised data from Day D+1
+ * - This ensures "Analysis for June 11" always shows "Observed June 12"
  * 
  * @param issueYear - Issue date year (when forecast was issued)
  * @param issueMonth - Issue date month (1-12)
  * @param issueDay - Issue date day
- * @param leadDay - Lead day string (D1, D2, D3, D4, D5)
+ * @param leadDay - Lead day string (D1, D2, D3, D4, D5) - ignored in calculation but kept for signature compatibility
  * @returns Object with verification date components and formatted string
  */
 export function calculateVerificationDate(
@@ -130,13 +124,10 @@ export function calculateVerificationDate(
   issueDay: number,
   leadDay: string
 ): { year: number; month: number; day: number; dateStr: string } {
-  // Extract lead day number (D1 -> 1, D2 -> 2, etc.)
-  const leadDayNum = parseInt(leadDay.replace('D', ''));
-  
-  // Create issue date and add lead day number to get verification date
+  // Create issue date and add exactly 1 day to get verification date
   const issueDate = new Date(issueYear, issueMonth - 1, issueDay);
   const verificationDate = new Date(issueDate);
-  verificationDate.setDate(verificationDate.getDate() + leadDayNum);
+  verificationDate.setDate(verificationDate.getDate() + 1);
   
   // Extract components
   const year = verificationDate.getFullYear();

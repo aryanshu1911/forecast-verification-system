@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { toast } from 'react-hot-toast';
 import { useRainfallConfig } from '@/app/utils/useRainfallConfig';
-import { MONTHLY_RAINFALL_CATEGORIES } from '@/app/utils/rainfallColors';
+import { MONTHLY_RAINFALL_CATEGORIES, RAINFALL_CATEGORIES } from '@/app/utils/rainfallColors';
 
 // Dynamically import the map component to avoid SSR issues with Leaflet
 const MapVisualization = dynamic(() => import('@/app/dashboard/components/MapVisualization'), {
@@ -29,13 +29,12 @@ export default function MapAnalysisTab() {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [rainfallData, setRainfallData] = useState<DistrictRainfall[]>([]);
-  const [metric, setMetric] = useState<'rainfall' | 'pod' | 'far' | 'bias' | 'csi' | 'subdivision'>('rainfall');
+  const [metric, setMetric] = useState<'rainfall' | 'pod' | 'far' | 'bias' | 'csi' | 'subdivision' | 'accuracy'>('rainfall');
   const [metricData, setMetricData] = useState<Record<string, any>>({});
   const [leadDay, setLeadDay] = useState<string>('D1');
   const [isLoading, setIsLoading] = useState(false);
-  const [classificationMode, setClassificationMode] = useState<'dual' | 'multi'>('multi');
   const [isSwitchingMode, setIsSwitchingMode] = useState(false);
-  const { config } = useRainfallConfig();
+  const { config, reload: reloadConfig } = useRainfallConfig();
 
   // Set default date to today
   useEffect(() => {
@@ -77,21 +76,8 @@ export default function MapAnalysisTab() {
     return null;
   };
 
-  // Fetch current classification mode on mount
-  useEffect(() => {
-    const fetchClassificationMode = async () => {
-      try {
-        const response = await fetch('/api/rainfall-mode');
-        const data = await response.json();
-        if (response.ok && data.mode) {
-          setClassificationMode(data.mode);
-        }
-      } catch (error) {
-        console.error('Error fetching classification mode:', error);
-      }
-    };
-    fetchClassificationMode();
-  }, []);
+  // Effect to sync with global config mode if needed
+  // (Previously fetched from /api/rainfall-mode redundantly)
 
   const fetchRainfallData = async (view: 'daily' | 'monthly', value: string) => {
     setIsLoading(true);
@@ -148,7 +134,7 @@ export default function MapAnalysisTab() {
   };
 
   const handleClassificationModeChange = async (mode: 'dual' | 'multi') => {
-    if (mode === classificationMode) return;
+    if (mode === config?.mode) return;
     
     setIsSwitchingMode(true);
     try {
@@ -161,7 +147,7 @@ export default function MapAnalysisTab() {
       const result = await response.json();
 
       if (response.ok) {
-        setClassificationMode(mode);
+        await reloadConfig(); // Refresh global config
         toast.success(`Switched to ${mode === 'dual' ? 'Dual' : 'Multi'} classification mode`);
         
         // Refresh data
@@ -203,57 +189,22 @@ export default function MapAnalysisTab() {
         );
       }
 
-      if (!config) return null;
-      
-      let categories = [];
-      if (config.mode === 'dual') {
-        categories = [
-          { name: config.classifications.dual.labels.below, color: '#FFFFE0', range: `< ${config.classifications.dual.threshold} mm` },
-          { name: config.classifications.dual.labels.above, color: '#FFA500', range: `>= ${config.classifications.dual.threshold} mm` }
-        ];
-      } else {
-        categories = config.classifications.multi.items
-          .filter(item => item.enabled)
-          .sort((a, b) => a.order - b.order)
-          .map(item => {
-            let color = '#FFFFE0';
-            if (item.variableName === 'XH') color = '#8B0000';
-            else if (item.variableName === 'VH') color = '#FF0000';
-            else if (item.variableName === 'H') color = '#FFA500';
-            
-            // Find next threshold for range
-            const nextItem = config.classifications.multi.items
-              .filter(i => i.enabled && i.thresholdMm > item.thresholdMm)
-              .sort((a, b) => a.thresholdMm - b.thresholdMm)[0];
-              
-            const range = nextItem 
-              ? `${item.thresholdMm}-${nextItem.thresholdMm - 0.1} mm`
-              : `>= ${item.thresholdMm} mm`;
-              
-            return { name: item.label, color, range };
-          });
-      }
-
       return (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-6 h-6 rounded border border-gray-300 bg-[#D3D3D3]"></div>
-            <div>
-              <div className="text-sm font-bold text-black">No Rainfall</div>
-              <div className="text-xs text-gray-900 font-semibold">0 mm</div>
-            </div>
-          </div>
-          {categories.map((cat) => (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {RAINFALL_CATEGORIES.map((cat) => (
             <div key={cat.name} className="flex items-center gap-3">
               <div className="w-6 h-6 rounded border border-gray-300" style={{ backgroundColor: cat.color }}></div>
               <div>
                 <div className="text-sm font-bold text-black">{cat.name}</div>
-                <div className="text-xs text-gray-900 font-semibold">{cat.range}</div>
+                <div className="text-xs text-gray-900 font-semibold">
+                  {cat.max === null ? `> ${cat.min} mm` : cat.min === 0 && cat.max === 0 ? '0 mm' : `${cat.min}-${cat.max} mm`}
+                </div>
               </div>
             </div>
           ))}
         </div>
       );
+
     }
     
     if (metric === 'subdivision') {
@@ -317,13 +268,13 @@ export default function MapAnalysisTab() {
             <div>
               <label className="block text-xs font-bold text-black uppercase mb-2">Classification</label>
               <select 
-                value={classificationMode} 
+                value={config?.mode || 'multi'} 
                 onChange={(e) => handleClassificationModeChange(e.target.value as any)}
-                disabled={isSwitchingMode}
+                disabled={isSwitchingMode || !config}
                 className="w-full px-3 py-2 border border-gray-400 rounded-md text-sm text-black font-semibold"
               >
-                <option value="dual">Dual Mode (L/H)</option>
-                <option value="multi">Multi Mode (L/H/VH/XH)</option>
+                <option value="dual">Dual Mode (Binary)</option>
+                <option value="multi">Multi Mode (Categorical)</option>
               </select>
             </div>
           </div>
@@ -357,7 +308,7 @@ export default function MapAnalysisTab() {
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Active Metric</label>
             <div className="grid grid-cols-3 gap-2">
-              {['rainfall', 'pod', 'far', 'bias', 'csi', 'subdivision'].map((m) => (
+              {['rainfall', 'pod', 'far', 'bias', 'csi', 'subdivision', 'accuracy'].map((m) => (
                 <button
                   key={m}
                   onClick={() => setMetric(m as any)}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
 import path from 'path';
+import { FileStorageManager, RealisedData } from '@/app/utils/fileStorageManager';
 
 const GEMINI_API_KEY = process.env.GOOGLE_GENAI_API_KEY || '';
 const GEMINI_API_URL =
@@ -23,40 +23,29 @@ interface DistrictStats {
 /**
  * Read all available realised rainfall data and compute per-district stats
  */
-function buildRainfallContext(): {
+async function buildRainfallContext(): Promise<{
   summary: string;
   districtStats: DistrictStats[];
   availableMonths: string[];
-} {
-  const realisedBase = path.join(process.cwd(), 'data', 'realised');
-
-  if (!fs.existsSync(realisedBase)) {
-    return { summary: 'No rainfall data available.', districtStats: [], availableMonths: [] };
-  }
-
+}> {
+  const storage = new FileStorageManager();
   const districtMap = new Map<string, DistrictStats>();
-  const availableMonths: string[] = [];
+  const availableMonthsSet = new Set<string>();
 
   try {
-    const years = fs.readdirSync(realisedBase).filter((y) => !y.startsWith('.'));
+    // 1. Get all realised data from KV and FS
+    // This is a bit heavy but necessary for the chatbot context
+    // We'll focus on May-Sept mostly or just what's available
+    const years = [2024, 2025, 2026];
+    const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
     for (const year of years) {
-      const yearDir = path.join(realisedBase, year);
-      if (!fs.statSync(yearDir).isDirectory()) continue;
-
-      const months = fs.readdirSync(yearDir).filter((m) => !m.startsWith('.'));
       for (const month of months) {
-        const monthDir = path.join(yearDir, month);
-        if (!fs.statSync(monthDir).isDirectory()) continue;
-
-        availableMonths.push(`${year}-${month}`);
-        const files = fs.readdirSync(monthDir).filter((f) => f.endsWith('.json'));
-
-        for (const file of files) {
-          try {
-            const content = fs.readFileSync(path.join(monthDir, file), 'utf-8');
-            const data: DailyDataFile = JSON.parse(content);
-
+        const monthData = await storage.loadMonthRealisedData(year, month);
+        if (monthData.size > 0) {
+          availableMonthsSet.add(`${year}-${month}`);
+          
+          for (const [date, data] of monthData.entries()) {
             for (const [district, rainfall] of Object.entries(data.districts)) {
               if (rainfall === null || isNaN(rainfall)) continue;
               const upper = district.trim().toUpperCase();
@@ -66,7 +55,7 @@ function buildRainfallContext(): {
                   district: upper,
                   totalRainfall: 0,
                   maxRainfall: 0,
-                  maxDate: data.date,
+                  maxDate: date,
                   daysWithRain: 0,
                   availableData: [],
                 });
@@ -74,23 +63,22 @@ function buildRainfallContext(): {
               const stats = districtMap.get(upper)!;
               stats.totalRainfall += rainfall;
               stats.daysWithRain += 1;
-              stats.availableData.push({ date: data.date, rainfall });
+              stats.availableData.push({ date, rainfall });
               if (rainfall > stats.maxRainfall) {
                 stats.maxRainfall = rainfall;
-                stats.maxDate = data.date;
+                stats.maxDate = date;
               }
             }
-          } catch {
-            // skip bad files
           }
         }
       }
     }
   } catch (err) {
-    console.error('Error reading rainfall data:', err);
+    console.error('Error building chatbot context:', err);
   }
 
   const districtStats = Array.from(districtMap.values());
+  const availableMonths = Array.from(availableMonthsSet);
 
   // Build concise summary text for the prompt
   const summaryLines = districtStats.map((d) =>
@@ -157,7 +145,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build data context from local files
-    const { summary, districtStats, availableMonths } = buildRainfallContext();
+    const { summary, districtStats, availableMonths } = await buildRainfallContext();
     const detailedData = buildDetailedDistrictData(districtStats, message);
 
     const systemContext = `You are an expert meteorological data analyst and climate scientist specializing in Maharashtra rainfall patterns. You have access to actual recorded rainfall data from the IMD (Indian Meteorological Department) Mumbai.

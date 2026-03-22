@@ -1,8 +1,8 @@
 {
-  "mode": "multi",
+  "mode": "dual",
   "classifications": {
     "dual": {
-      "enabled": false,
+      "enabled": true,
       "threshold": 64.5,
       "labels": {
         "below": "L",
@@ -10,7 +10,7 @@
       }
     },
     "multi": {
-      "enabled": true,
+      "enabled": false,
       "items": [
         {
           "id": "L",
@@ -19,10 +19,14 @@
           "thresholdMm": 0,
           "codes": [
             1,
-            8
+            2,
+            3,
+            4
           ],
           "enabled": true,
-          "order": 1
+          "order": 1,
+          "level": 1,
+          "parentCategory": "LOW"
         },
         {
           "id": "H",
@@ -30,7 +34,6 @@
           "label": "Heavy",
           "thresholdMm": 64.5,
           "codes": [
-            2,
             5,
             6,
             7,
@@ -41,7 +44,9 @@
             56
           ],
           "enabled": true,
-          "order": 2
+          "order": 2,
+          "level": 2,
+          "parentCategory": "HEAVY"
         },
         {
           "id": "VH",
@@ -49,10 +54,10 @@
           "label": "Very Heavy",
           "thresholdMm": 115.6,
           "codes": [
+            8,
             9,
             10,
             11,
-            12,
             25,
             28,
             34,
@@ -60,7 +65,9 @@
             44
           ],
           "enabled": true,
-          "order": 3
+          "order": 3,
+          "level": 3,
+          "parentCategory": "HEAVY"
         },
         {
           "id": "XH",
@@ -68,27 +75,19 @@
           "label": "Extremely Heavy",
           "thresholdMm": 204.5,
           "codes": [
+            12,
             26,
             29,
             35,
             38
           ],
           "enabled": true,
-          "order": 4
-        },
-        {
-          "id": "NEW_1773058956178",
-          "variableName": "NEW",
-          "label": "New Classification",
-          "thresholdMm": 0,
-          "codes": [
-            57
-          ],
-          "enabled": true,
-          "order": 5
+          "order": 4,
+          "level": 4,
+          "parentCategory": "HEAVY"
         }
       ]
     }
   },
-  "lastUpdated": "2026-03-19T12:52:47.209Z"
+  "lastUpdated": "2026-03-21T09:10:26.304Z"
 }

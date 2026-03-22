@@ -4,7 +4,7 @@
   "districts": {
     "PALGHAR": null,
     "THANE": null,
-    "MUMBAI": null,
+    "MUMBAI": 10,
     "RAIGAD": null,
     "RATNAGIRI": null,
     "SINDHUDURG": null,

@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       }
 
       const leadDayCode = selectedDay; // Already in format "D1", "D2", etc.
-      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode);
+      const comparisons = await compareForDateRange(startDate, endDate, leadDayCode, threshold);
       
       // Calculate district-wise statistics
       const districtStats = getDistrictWiseAccuracy(comparisons);
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
           h: stats.correct,
           m: stats.missedEvents,
           f: stats.falseAlarms,
-          cn: stats.correctNonEvents,
+          cn: stats.correctNegatives,
           total: stats.totalPredictions
         };
       }
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       const days: any = {};
 
       for (const leadDay of leadDays) {
-        const comparisons = await compareForDateRange(startDate, endDate, leadDay);
+        const comparisons = await compareForDateRange(startDate, endDate, leadDay, threshold);
         const aggregateStats = calculateAccuracy(comparisons);
 
         days[leadDay] = {
@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
           h: aggregateStats.correct,
           m: aggregateStats.missedEvents,
           f: aggregateStats.falseAlarms,
-          cn: aggregateStats.correctNonEvents,
+          cn: aggregateStats.correctNegatives,
           total: aggregateStats.totalPredictions
         };
       }

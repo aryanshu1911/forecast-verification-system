@@ -6,6 +6,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import { kv } from '@vercel/kv';
 
 // Dual Mode Configuration
 export interface DualModeConfig {
@@ -17,7 +18,6 @@ export interface DualModeConfig {
   };
 }
 
-// Multi Mode Classification Item
 export interface MultiModeClassification {
   id: string;
   variableName: string;
@@ -26,6 +26,8 @@ export interface MultiModeClassification {
   codes: number[];
   enabled: boolean;
   order: number;
+  level: number;
+  parentCategory: 'LOW' | 'HEAVY';
 }
 
 // Multi Mode Configuration
@@ -60,85 +62,72 @@ export async function loadRainfallConfig(): Promise<RainfallConfig> {
   if (configCache && (now - cacheTimestamp) < CACHE_TTL) {
     return configCache;
   }
-  
-  try {
-    const fileContent = await fs.promises.readFile(CONFIG_PATH, 'utf-8');
-    const config: RainfallConfig = JSON.parse(fileContent);
-    
-    // Validate config structure
-    if (!config.mode || !config.classifications) {
-      throw new Error('Invalid configuration structure');
+
+  let config: RainfallConfig | null = null;
+
+  // 1. Try Vercel KV first (if environment variables are present)
+  const kvUrl = (process.env.KV_REST_API_URL || process.env.STORE_KV_REST_API_URL)?.trim();
+  if (kvUrl) {
+    try {
+      config = await kv.get<RainfallConfig>('rainfall_config');
+    } catch (kvError) {
+      console.error('KV load error (falling back to FS):', kvError);
     }
-    
-    configCache = config;
-    cacheTimestamp = now;
-    
-    return config;
-  } catch (error: any) {
-    console.error('Failed to load rainfall config:', error);
-    
-    // Return default config
-    const defaultConfig: RainfallConfig = {
+  }
+
+  // 2. Fallback to Local Filesystem
+  if (!config) {
+    try {
+      if (fs.existsSync(CONFIG_PATH)) {
+        const fileContent = await fs.promises.readFile(CONFIG_PATH, 'utf-8');
+        config = JSON.parse(fileContent);
+      }
+    } catch (fsError) {
+      console.error('FS load error (using defaults):', fsError);
+    }
+  }
+  
+  // 3. Last Resort: Default Config
+  if (!config) {
+    config = {
       mode: 'dual',
       classifications: {
         dual: {
           enabled: true,
           threshold: 64.5,
-          labels: {
-            below: 'L',
-            above: 'H'
-          }
+          labels: { below: 'L', above: 'H' }
         },
         multi: {
           enabled: false,
           items: [
-            {
-              id: 'L',
-              variableName: 'L',
-              label: 'Less',
-              thresholdMm: 0.0,
-              codes: [],
-              enabled: true,
-              order: 1
-            },
-            {
-              id: 'H',
-              variableName: 'H',
-              label: 'Heavy',
-              thresholdMm: 64.5,
-              codes: [5, 6, 7, 27, 33, 37, 45, 56],
-              enabled: true,
-              order: 2
-            },
-            {
-              id: 'VH',
-              variableName: 'VH',
-              label: 'Very Heavy',
-              thresholdMm: 115.6,
-              codes: [8, 9, 10, 11, 12, 25, 28, 34, 39, 44],
-              enabled: true,
-              order: 3
-            },
-            {
-              id: 'XH',
-              variableName: 'XH',
-              label: 'Extremely Heavy',
-              thresholdMm: 204.5,
-              codes: [26, 29, 35, 38],
-              enabled: true,
-              order: 4
-            }
+            { id: 'VL', variableName: 'VL', label: 'Very Light', thresholdMm: 0.1, codes: [2, 3], enabled: true, order: 1, level: 1, parentCategory: 'LOW' },
+            { id: 'L', variableName: 'L', label: 'Light', thresholdMm: 2.5, codes: [4], enabled: true, order: 2, level: 2, parentCategory: 'LOW' },
+            { id: 'M', variableName: 'M', label: 'Moderate', thresholdMm: 15.6, codes: [5, 6, 7], enabled: true, order: 3, level: 3, parentCategory: 'LOW' },
+            { id: 'H', variableName: 'H', label: 'Heavy', thresholdMm: 64.5, codes: [27, 33, 37, 45, 56], enabled: true, order: 4, level: 4, parentCategory: 'HEAVY' },
+            { id: 'VH', variableName: 'VH', label: 'Very Heavy', thresholdMm: 115.6, codes: [8, 9, 10, 11, 12, 25, 28, 34, 39, 44], enabled: true, order: 5, level: 5, parentCategory: 'HEAVY' },
+            { id: 'XH', variableName: 'XH', label: 'Extremely Heavy', thresholdMm: 204.5, codes: [26, 29, 35, 38], enabled: true, order: 6, level: 6, parentCategory: 'HEAVY' }
           ]
         }
       },
       lastUpdated: new Date().toISOString()
     };
-    
-    configCache = defaultConfig;
-    cacheTimestamp = now;
-    
-    return defaultConfig;
   }
+  
+  // Migration: Ensure multi-mode items have parentCategory and level
+  if (config.classifications.multi && config.classifications.multi.items) {
+    config.classifications.multi.items = config.classifications.multi.items.map((item, idx) => {
+      return {
+        ...item,
+        level: item.level || (idx + 1), // Fallback level if missing
+        parentCategory: item.parentCategory || (item.thresholdMm >= 64.5 ? 'HEAVY' : 'LOW')
+      };
+    });
+  }
+
+  configCache = config;
+  cacheTimestamp = now;
+  
+  return config;
 }
 
 /**
@@ -148,16 +137,33 @@ export async function saveRainfallConfig(config: RainfallConfig): Promise<void> 
   try {
     config.lastUpdated = new Date().toISOString();
     
-    const dataDir = path.dirname(CONFIG_PATH);
-    if (!fs.existsSync(dataDir)) {
-      await fs.promises.mkdir(dataDir, { recursive: true });
+    // 1. Try saving to Vercel KV if available
+    const kvUrl = (process.env.KV_REST_API_URL || process.env.STORE_KV_REST_API_URL)?.trim();
+    if (kvUrl) {
+      await kv.set('rainfall_config', config);
     }
-    
-    await fs.promises.writeFile(
-      CONFIG_PATH,
-      JSON.stringify(config, null, 2),
-      'utf-8'
-    );
+
+    // 2. Try saving to Filesystem (will fail on Vercel but work locally)
+    try {
+      const dataDir = path.dirname(CONFIG_PATH);
+      if (!fs.existsSync(dataDir)) {
+        await fs.promises.mkdir(dataDir, { recursive: true });
+      }
+      
+      await fs.promises.writeFile(
+        CONFIG_PATH,
+        JSON.stringify(config, null, 2),
+        'utf-8'
+      );
+    } catch (fsError) {
+      // On Vercel this is expected to fail, we only log it if KV is also missing
+      const kvUrl = (process.env.KV_REST_API_URL || process.env.STORE_KV_REST_API_URL)?.trim();
+      if (!kvUrl) {
+        console.error('Failed to save to FS and KV is not available:', fsError);
+        throw fsError;
+      }
+      console.log('Skipped FS save (likely on Vercel)');
+    }
     
     // Clear cache
     configCache = null;
@@ -315,4 +321,30 @@ export async function getPublicClassificationInfo(): Promise<{
     mode: config.mode,
     availableLabels
   };
+}
+/**
+ * Get the numeric level of a classification label
+ */
+export async function getLevelByLabel(label: string): Promise<number> {
+  const config = await loadRainfallConfig();
+  
+  if (config.mode === 'dual') {
+    return label === config.classifications.dual.labels.above ? 2 : 1;
+  } else {
+    const item = config.classifications.multi.items.find(i => i.variableName === label);
+    return item ? item.level : 1;
+  }
+}
+/**
+ * Get the parent category (LOW/HEAVY) of a classification label
+ */
+export async function getParentCategoryByLabel(label: string): Promise<'LOW' | 'HEAVY'> {
+  const config = await loadRainfallConfig();
+  
+  if (config.mode === 'dual') {
+    return label === config.classifications.dual.labels.above ? 'HEAVY' : 'LOW';
+  } else {
+    const item = config.classifications.multi.items.find(i => i.variableName === label);
+    return item ? item.parentCategory : 'LOW';
+  }
 }

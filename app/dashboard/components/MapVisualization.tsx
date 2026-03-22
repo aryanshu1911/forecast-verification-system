@@ -4,7 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { 
   getRainfallColorDynamic, 
-  getRainfallCategoryDynamic, 
+  getRainfallCategory, 
   getMonthlyRainfallColor,
   getMonthlyRainfallCategory,
   normalizeDistrictName, 
@@ -24,7 +24,7 @@ interface MapVisualizationProps {
   viewMode: 'daily' | 'monthly';
   selectedDate: string;
   selectedMonth: string;
-  metric?: 'rainfall' | 'pod' | 'far' | 'bias' | 'csi' | 'subdivision';
+  metric?: 'rainfall' | 'pod' | 'far' | 'bias' | 'csi' | 'subdivision' | 'accuracy';
   metricData?: Record<string, any>;
 }
 
@@ -145,6 +145,14 @@ export default function MapVisualization({
       if (val >= 0.2) return '#dcfce7';
       return '#f0fdf4';
     }
+    if (metric === 'accuracy') {
+      // Green scale for Accuracy (High is good) - same as POD
+      if (val >= 90) return '#166534';
+      if (val >= 80) return '#22c55e';
+      if (val >= 70) return '#86efac';
+      if (val >= 60) return '#dcfce7';
+      return '#f0fdf4';
+    }
     if (metric === 'far') {
       // Red scale for FAR (Low is good)
       if (val >= 0.8) return '#991b1b';
@@ -218,12 +226,12 @@ export default function MapVisualization({
     if (metric === 'rainfall') {
       const data = rainfallMap.get(districtNorm);
       const rainfall = data?.rainfall || 0;
-      const category = config ? getRainfallCategoryDynamic(rainfall, config) : 'N/A';
+      const category = viewMode === 'daily' ? getRainfallCategory(rainfall) : getMonthlyRainfallCategory(rainfall);
       
       if (viewMode === 'daily') {
         tooltipContent += `Rainfall: <strong>${rainfall.toFixed(1)} mm</strong><br/>Category: <em>${category}</em>`;
       } else {
-        tooltipContent += `Total accumulation: <strong>${rainfall.toFixed(1)} mm</strong><br/>`;
+        tooltipContent += `Total accumulation: <strong>${rainfall.toFixed(1)} mm</strong><br/>Category: <em>${category}</em><br/>`;
         if (data?.maxRainfallValue !== undefined && data?.maxRainfallDate) {
           tooltipContent += `Max rainfall: <strong>${data.maxRainfallValue.toFixed(1)} mm</strong> on <strong>${data.maxRainfallDate}</strong>`;
         } else if (data?.maxRainfallDate) {
@@ -259,6 +267,15 @@ export default function MapVisualization({
         const layer = e.target;
         layer.setStyle(style(feature));
       },
+      click: (e: any) => {
+        const data = rainfallMap.get(districtNorm);
+        const rainfall = data?.rainfall || 0;
+        if (viewMode === 'monthly') {
+          alert(`District: ${districtName}\nTotal Cumulative Rainfall for this month: ${rainfall.toFixed(1)} mm`);
+        } else {
+          alert(`District: ${districtName}\nRainfall for ${new Date(selectedDate).toLocaleDateString('en-IN')}: ${rainfall.toFixed(1)} mm`);
+        }
+      }
     });
   };
 

@@ -31,10 +31,10 @@ export default function DashboardPage() {
     }
   }, [router]);
 
-  // Keyboard shortcut for admin panel (Ctrl+T or Cmd+T)
+  // Keyboard shortcut for admin panel (Ctrl+H or Cmd+H)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 't') {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
         e.preventDefault();
         setIsAdminModalOpen(true);
       }

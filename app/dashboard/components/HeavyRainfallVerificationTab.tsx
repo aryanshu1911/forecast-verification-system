@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { format } from 'date-fns';
 import * as XLSX from 'xlsx';
+import { useRainfallConfig } from '@/app/utils/useRainfallConfig';
 
 interface SkillScores {
   POD: number;
@@ -52,6 +53,7 @@ export default function HeavyRainfallVerificationTab() {
   const [overviewResults, setOverviewResults] = useState<OverviewResults | null>(null);
   const [detailedResults, setDetailedResults] = useState<DetailedResults | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const { config, isLoading: configLoading } = useRainfallConfig();
 
   const runVerification = async () => {
     setIsLoading(true);
@@ -205,8 +207,10 @@ export default function HeavyRainfallVerificationTab() {
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Verification Summary</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
-                <span className="text-gray-600">Threshold:</span>
-                <span className="ml-2 font-semibold text-gray-900">{overviewResults.threshold}mm</span>
+                <span className="text-gray-600">Threshold/Method:</span>
+                <span className="ml-2 font-semibold text-gray-900">
+                  {config?.mode === 'multi' ? 'Multi-Category' : `${overviewResults.threshold}mm`}
+                </span>
               </div>
               <div>
                 <span className="text-gray-600">Date Range:</span>
@@ -219,8 +223,10 @@ export default function HeavyRainfallVerificationTab() {
                 <span className="ml-2 font-semibold text-gray-900">Day 1 to Day 5</span>
               </div>
               <div>
-                <span className="text-gray-600">Mode:</span>
-                <span className="ml-2 font-semibold text-gray-900">Overview</span>
+                <span className="text-gray-600">Verification Mode:</span>
+                <span className={`ml-2 px-2 py-0.5 rounded text-xs font-bold ${config?.mode === 'multi' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                   {configLoading ? 'Loading...' : (config?.mode === 'multi' ? 'Categorical (Multi)' : 'Binary (Dual)')}
+                </span>
               </div>
             </div>
           </div>
@@ -242,6 +248,9 @@ export default function HeavyRainfallVerificationTab() {
                       
                       // Title
                       excelData.push(['Heavy Rainfall Verification - Overview']);
+                      
+                      // Mode Info
+                      excelData.push([`Verification Mode: ${config?.mode === 'multi' ? 'Multi-Category' : 'Dual (Binary)'}`]);
                       
                       // Date Range
                       excelData.push([`Date Range: ${startDate} to ${endDate}`]);

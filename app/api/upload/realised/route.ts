@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { processRealisedUpload } from '@/app/utils/uploadProcessor';
+import { clearCache } from '@/app/utils/unifiedDataLoader';
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,6 +55,9 @@ export async function POST(request: NextRequest) {
     
     // Process upload
     const summary = await processRealisedUpload(buffer, { year, month });
+    
+    // Clear data cache
+    clearCache();
     
     // Return success response
     return NextResponse.json({
